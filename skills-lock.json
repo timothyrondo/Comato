@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "skills": {
+    "celo-builders": {
+      "source": "celobuilders.xyz",
+      "sourceType": "well-known",
+      "computedHash": "9b383bb781aa0fcf607928f46a1491e95368c8c0886c387b7a936f3ae35ee4b4"
+    },
+    "celopedia-skill": {
+      "source": "celo-org/celopedia-skills",
+      "sourceType": "github",
+      "skillPath": "skills/celopedia-skill/SKILL.md",
+      "computedHash": "82179a7f12fba553a704785fd0f8ba467a0d3fff73c0c33e595b78179b3ace7c"
+    }
+  }
+}

@@ -16,3 +16,7 @@ packages/contracts/broadcast/**/dry-run/
 # vite
 apps/web/dist/
 .DS_Store
+
+# installed skill tooling (re-derivable from skills-lock.json) + local Claude config
+.agents/
+.claude/
