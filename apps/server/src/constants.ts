@@ -68,3 +68,30 @@ export const USDC = {
 } as const;
 
 export const DEFAULT_CELO_RPC = "https://forno.celo.org";
+
+/**
+ * DEFAULTS — pure tuning knobs that used to be read from env. They are neither
+ * secrets nor genuinely per-deployment values, so they live in code as the single
+ * source of truth. `config.ts` uses them directly; env now carries only secrets,
+ * per-deployment values, and (for the KEEP set) the required inputs.
+ *
+ * Adjust a value here and it changes everywhere. The facilitator URL keeps its own
+ * top-level constant (`X402_FACILITATOR_URL`) and is referenced directly.
+ */
+export const DEFAULTS = {
+  /** HTTP port the heartbeat server binds. */
+  port: 4021,
+  /**
+   * Sync supported kinds with the facilitator on boot. Required for real runs — with
+   * it off the server boots but `/heartbeat` 500s ("call initialize()").
+   */
+  syncFacilitatorOnStart: true,
+  /** Verify each settlement's on-chain sender is the Celo relayer. */
+  assertRelayer: true,
+  /** Heartbeat client: ms between rounds. */
+  heartbeatIntervalMs: 15_000,
+  /** Heartbeat client: total heartbeats before stopping (0 = run forever). */
+  heartbeatMax: 0,
+  /** Heartbeat client: per-payment ceiling, decimal USDC (guards a mispriced route). */
+  maxPaymentUsdc: "0.01",
+} as const;

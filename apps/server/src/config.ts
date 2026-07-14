@@ -9,6 +9,7 @@ import { isAddress, parseUnits } from "viem";
 import {
   CELO_NETWORK,
   DEFAULT_CELO_RPC,
+  DEFAULTS,
   USDC,
   X402_FACILITATOR_URL,
   type CeloNetwork,
@@ -23,15 +24,6 @@ const addressSchema = z
 const privateKeySchema = z
   .string()
   .regex(/^0x[0-9a-fA-F]{64}$/, "must be a 0x-prefixed 32-byte hex private key");
-
-/** Parse an env boolean: "true"/"1" -> true, anything else -> false; unset -> default. */
-function boolEnv(def: boolean) {
-  return z.preprocess((v) => {
-    if (v === undefined || v === "") return def;
-    if (typeof v === "string") return v === "true" || v === "1";
-    return Boolean(v);
-  }, z.boolean());
-}
 
 function toAtomicUsdc(value: string, label: string): string {
   try {
@@ -65,7 +57,6 @@ export interface ServerConfig {
 export function loadServerConfig(env: Env = process.env): ServerConfig {
   const schema = z.object({
     COMATO_WALLET: addressSchema,
-    X402_FACILITATOR_URL: z.string().url().default(X402_FACILITATOR_URL),
     // Required: the Celo facilitator rejects /settle without X-API-Key (401). Create it
     // on the x402.celo.org dashboard (sign with a wallet, no gas). 1 credit per settle.
     X402_API_KEY: z
@@ -73,23 +64,22 @@ export function loadServerConfig(env: Env = process.env): ServerConfig {
       .min(1, "X402_API_KEY is required — create it on the x402.celo.org dashboard; /settle 401s without it"),
     CELO_RPC: z.string().url().default(DEFAULT_CELO_RPC),
     PREMIUM_USDC: z.string().default("0.001"),
-    PORT: z.coerce.number().int().positive().max(65535).default(4021),
-    X402_SYNC_ON_START: boolEnv(true),
-    X402_ASSERT_RELAYER: boolEnv(true),
   });
 
   const parsed = schema.parse(env);
   return {
     payTo: parsed.COMATO_WALLET as `0x${string}`,
-    facilitatorUrl: parsed.X402_FACILITATOR_URL,
+    // Facilitator MUST stay Celo's own — a different relayer settles fine but does not
+    // count for Track 2. Not env-overridable; it is a fixed constant.
+    facilitatorUrl: X402_FACILITATOR_URL,
     apiKey: parsed.X402_API_KEY,
     rpcUrl: parsed.CELO_RPC,
     network: CELO_NETWORK,
     premiumUsdc: parsed.PREMIUM_USDC,
     premiumAtomic: toAtomicUsdc(parsed.PREMIUM_USDC, "PREMIUM_USDC"),
-    port: parsed.PORT,
-    syncFacilitatorOnStart: parsed.X402_SYNC_ON_START,
-    assertRelayer: parsed.X402_ASSERT_RELAYER,
+    port: DEFAULTS.port,
+    syncFacilitatorOnStart: DEFAULTS.syncFacilitatorOnStart,
+    assertRelayer: DEFAULTS.assertRelayer,
   };
 }
 
@@ -108,10 +98,6 @@ export function loadClientConfig(env: Env = process.env): ClientConfig {
   const schema = z.object({
     HEARTBEAT_URL: z.string().url().default("http://localhost:4021/heartbeat"),
     SUBSCRIBER_PRIVATE_KEYS: z.string().min(1, "SUBSCRIBER_PRIVATE_KEYS is required"),
-    HEARTBEAT_INTERVAL_MS: z.coerce.number().int().positive().default(15000),
-    HEARTBEAT_CONCURRENCY: z.coerce.number().int().positive().optional(),
-    HEARTBEAT_MAX: z.coerce.number().int().nonnegative().default(0),
-    MAX_PAYMENT_USDC: z.string().default("0.01"),
   });
 
   const parsed = schema.parse(env);
@@ -134,9 +120,10 @@ export function loadClientConfig(env: Env = process.env): ClientConfig {
   return {
     heartbeatUrl: parsed.HEARTBEAT_URL,
     subscriberKeys: keys,
-    intervalMs: parsed.HEARTBEAT_INTERVAL_MS,
-    concurrency: parsed.HEARTBEAT_CONCURRENCY ?? keys.length,
-    maxHeartbeats: parsed.HEARTBEAT_MAX,
-    maxValueAtomic: parseUnits(parsed.MAX_PAYMENT_USDC, USDC.decimals),
+    intervalMs: DEFAULTS.heartbeatIntervalMs,
+    // No fixed constant: concurrency defaults to the subscriber count.
+    concurrency: keys.length,
+    maxHeartbeats: DEFAULTS.heartbeatMax,
+    maxValueAtomic: parseUnits(DEFAULTS.maxPaymentUsdc, USDC.decimals),
   };
 }

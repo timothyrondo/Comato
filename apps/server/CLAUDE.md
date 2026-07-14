@@ -25,7 +25,7 @@ the **Celo relayer** `0x0d74d5cefd2e7f24e623330ebe3d8d4cb45ffb48`. That means:
   `SettleResponse.transaction`, then reads that tx from the Celo RPC and asserts
   `tx.from === X402_RELAYER`. A mismatch logs `x402.relayer.mismatch` at error level
   (the count will not land — check the facilitator URL). Toggle with
-  `X402_ASSERT_RELAYER`. The reader (`fetchSettlementSender`) reuses **one cached viem
+  `DEFAULTS.assertRelayer` (`src/constants.ts`). The reader (`fetchSettlementSender`) reuses **one cached viem
   client per RPC** and does a **brief non-throwing retry** (O6) so a settlement that
   isn't yet propagated doesn't emit a spurious `x402.relayer.unverified`; it never throws
   and never blocks the settlement (returns `null` → `unverified` only after retries).
@@ -86,26 +86,26 @@ bun run typecheck            # tsc --noEmit
 bun test                     # mocked-facilitator tests (no funds/network needed)
 ```
 
-`X402_SYNC_ON_START=true` (default) is **required** for real runs: the server fetches
-supported kinds from the facilitator on boot to build the 402. With it off the server
-boots but `/heartbeat` 500s ("call initialize()"). Tests pass a mock facilitator, so
-they run fully offline.
+`DEFAULTS.syncFacilitatorOnStart` (`src/constants.ts`, default `true`) is **required**
+for real runs: the server fetches supported kinds from the facilitator on boot to build
+the 402. With it off the server boots but `/heartbeat` 500s ("call initialize()"). Tests
+pass a mock facilitator, so they run fully offline.
 
 ## Env
+
+`.env` holds only secrets + per-deployment values. **Tuning params (port,
+facilitator URL, `X402_SYNC_ON_START`/`X402_ASSERT_RELAYER` toggles, heartbeat
+cadence, `MAX_PAYMENT_USDC` ceiling) live in `src/constants.ts` (`DEFAULTS`)** —
+adjust them there, not in `.env`.
 
 | var | purpose |
 |---|---|
 | `COMATO_WALLET` | registered EOA, premium **payee** (required) |
-| `X402_FACILITATOR_URL` | facilitator API base (default `https://api.x402.celo.org`; testnet `https://api.x402.sepolia.celo.org`) |
 | `X402_API_KEY` | **required** — Celo facilitator key, sent as `X-API-Key` on `/settle` (1 credit each; 500 free mainnet / 1000 testnet). `/verify`+`/supported` are public |
+| `SUBSCRIBER_PRIVATE_KEYS` | **required** — comma-separated 0x keys of test subscribers (client) |
 | `CELO_RPC` | RPC for the relayer assertion (default forno) |
 | `PREMIUM_USDC` | premium per heartbeat, decimal USDC (default `0.001`) |
-| `PORT` | server port (default `4021`) |
-| `X402_SYNC_ON_START` / `X402_ASSERT_RELAYER` | facilitator sync / relayer check toggles |
 | `HEARTBEAT_URL` | client target (default `http://localhost:4021/heartbeat`) |
-| `SUBSCRIBER_PRIVATE_KEYS` | comma-separated 0x keys of test subscribers (client) |
-| `HEARTBEAT_INTERVAL_MS` / `HEARTBEAT_CONCURRENCY` / `HEARTBEAT_MAX` | loop cadence |
-| `MAX_PAYMENT_USDC` | per-payment ceiling guard (client, default `0.01`) |
 
 Secrets from env only — never commit real keys. `.env` is gitignored; `.env.example`
 holds placeholders.
