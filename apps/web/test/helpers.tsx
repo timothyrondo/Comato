@@ -10,9 +10,12 @@ const store = globalThis as Record<string, unknown>;
 
 /** Swap the viem stub client's methods for the current test. */
 export function setClientStub(partial: {
-  readContract?: (...a: unknown[]) => Promise<unknown>;
-  getContractEvents?: (...a: unknown[]) => Promise<unknown>;
-  getBlock?: (...a: unknown[]) => Promise<unknown>;
+  // `any[]` params so a test can pass a stub whose reads are typed to their own
+  // shape (e.g. `({ functionName }: { functionName: string }) => …`) — a narrower
+  // param than `unknown[]` would reject under contravariance.
+  readContract?: (...a: any[]) => Promise<unknown>;
+  getContractEvents?: (...a: any[]) => Promise<unknown>;
+  getBlock?: (...a: any[]) => Promise<unknown>;
 }): void {
   (store.__setClientStub as (p: unknown) => void)(partial);
 }
