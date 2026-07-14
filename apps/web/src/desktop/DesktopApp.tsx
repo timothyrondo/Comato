@@ -74,7 +74,7 @@ function StatusPill({ level }: { level: RiskLevel }) {
         className="pulse-dot h-1.5 w-1.5 rounded-full"
         style={{
           background:
-            level === "safe" ? "#57f0a8" : level === "warn" ? "#f2b750" : "#ff5f66",
+            level === "safe" ? "#2a9d6f" : level === "warn" ? "#e0912f" : "#e0524e",
         }}
       />
       {riskCopy[level]}
@@ -103,7 +103,7 @@ function Sidebar({
     <aside className="glass sticky top-6 hidden h-[calc(100dvh-3rem)] w-[248px] shrink-0 flex-col rounded-panel p-5 lg:flex">
       {/* Brand */}
       <div className="flex items-center gap-3 px-1">
-        <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-b from-accent-bright to-accent text-[#052015] shadow-[0_0_26px_-6px_rgba(35,209,138,0.9)]">
+        <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-b from-accent-bright to-accent text-[#fff7ef] shadow-[0_0_26px_-6px_rgba(241,137,60,0.9)]">
           <ShieldCheck size={22} />
         </span>
         <div className="leading-tight">
@@ -128,17 +128,17 @@ function Sidebar({
                 "group relative flex items-center gap-3 rounded-2xl px-3.5 py-3 text-[14.5px] font-semibold transition-all " +
                 (active
                   ? "glass-accent text-ink"
-                  : "text-ink-muted hover:bg-white/5 hover:text-ink")
+                  : "text-ink-muted hover:bg-ink/5 hover:text-ink")
               }
             >
               <Icon
                 size={20}
-                className={active ? "text-accent-bright" : ""}
+                className={active ? "text-accent-ink" : ""}
                 strokeWidth={active ? 2 : 1.75}
               />
               {label}
               {active && (
-                <span className="absolute right-3 h-1.5 w-1.5 rounded-full bg-accent-bright shadow-[0_0_10px_2px_rgba(87,240,168,0.8)]" />
+                <span className="absolute right-3 h-1.5 w-1.5 rounded-full bg-accent-bright shadow-[0_0_10px_2px_rgba(255,168,90,0.8)]" />
               )}
             </button>
           );
@@ -162,7 +162,7 @@ function Sidebar({
             <div className="truncate text-[11px] text-ink-muted">@{user.handle}</div>
           </div>
           <span
-            className="h-2 w-2 shrink-0 rounded-full bg-accent-bright shadow-[0_0_8px_2px_rgba(87,240,168,0.7)]"
+            className="h-2 w-2 shrink-0 rounded-full bg-accent-bright shadow-[0_0_8px_2px_rgba(255,168,90,0.7)]"
             title={isLive ? "Live" : "Demo"}
           />
         </div>
@@ -307,7 +307,7 @@ function HeroBanner() {
             <h2 className="font-display text-[3.4rem] font-extrabold leading-none tracking-tight text-ink">
               Protected
             </h2>
-            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-b from-accent-bright to-accent text-[#052015] shadow-[0_0_26px_-4px_rgba(35,209,138,0.95)]">
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-b from-accent-bright to-accent text-[#fff7ef] shadow-[0_0_26px_-4px_rgba(241,137,60,0.95)]">
               <ShieldCheck size={24} />
             </span>
           </div>
@@ -324,14 +324,14 @@ function HeroBanner() {
             </div>
             <div className="text-ink-muted">Since last check</div>
           </div>
-          <span className="h-9 w-px bg-white/10" />
+          <span className="h-9 w-px bg-ink/10" />
           <div>
             <div className="tnum font-display text-[22px] font-bold text-ink">
               {position.uptimePct}%
             </div>
             <div className="text-ink-muted">Monitor uptime</div>
           </div>
-          <span className="h-9 w-px bg-white/10" />
+          <span className="h-9 w-px bg-ink/10" />
           <div>
             <div className="tnum font-display text-[22px] font-bold text-ink">
               {position.protectedSinceDays}d
@@ -478,7 +478,7 @@ function PremiumRail() {
         <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-on-dark-muted">
           Total saved
         </div>
-        <div className="tnum mt-1 font-display text-[2rem] font-extrabold leading-none text-accent-bright">
+        <div className="tnum mt-1 font-display text-[2rem] font-extrabold leading-none text-accent-ink">
           {money(activitySummary.totalSavedUsd)}
         </div>
         <div className="mt-1.5 text-[12px] text-on-dark-muted">
@@ -541,9 +541,9 @@ function AlertRail() {
         before it's reached.
       </p>
       {/* Buffer meter */}
-      <div className="relative mt-5 h-2.5 rounded-full bg-white/8">
+      <div className="relative mt-5 h-2.5 rounded-full bg-ink/10">
         <div
-          className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-accent to-accent-bright shadow-[0_0_16px_-2px_rgba(35,209,138,0.8)]"
+          className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-accent to-accent-bright shadow-[0_0_16px_-2px_rgba(241,137,60,0.8)]"
           style={{ width: `${cur}%` }}
         />
         <span
@@ -636,7 +636,7 @@ function PositionsView() {
         </Panel>
         <Panel className="glass-deep p-5 text-on-dark" delay={140}>
           <div className="flex items-center gap-3.5">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent/20 text-accent-bright shadow-[0_0_24px_-6px_rgba(35,209,138,0.7)]">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent/20 text-accent-ink shadow-[0_0_24px_-6px_rgba(241,137,60,0.7)]">
               <ShieldCheck size={22} />
             </span>
             <div className="min-w-0 flex-1">
@@ -723,7 +723,7 @@ function ActivityView() {
               className={
                 "rounded-full px-4 py-2 text-[13px] font-semibold transition-all " +
                 (active
-                  ? "bg-gradient-to-b from-accent-bright to-accent text-[#052015] shadow-[0_0_22px_-6px_rgba(35,209,138,0.85)]"
+                  ? "bg-gradient-to-b from-accent-bright to-accent text-[#fff7ef] shadow-[0_0_22px_-6px_rgba(241,137,60,0.85)]"
                   : "glass-soft text-ink-soft")
               }
             >
@@ -785,7 +785,7 @@ function SettingsView() {
           </div>
         </div>
         <div className="glass-chip mt-5 flex items-center gap-3 rounded-tile px-4 py-3.5">
-          <Wallet size={18} className="text-accent-bright" />
+          <Wallet size={18} className="text-accent-ink" />
           <span className="text-[12px] text-on-dark-muted">Wallet</span>
           <span className="tnum ml-auto text-[13px] font-semibold">{user.walletShort}</span>
         </div>
@@ -800,7 +800,7 @@ function SettingsView() {
             key={label}
             type="button"
             className={
-              "flex w-full items-center gap-3.5 px-6 py-4 text-left transition-colors hover:bg-white/5 " +
+              "flex w-full items-center gap-3.5 px-6 py-4 text-left transition-colors hover:bg-ink/5 " +
               (i > 0 ? "border-t border-line" : "")
             }
           >

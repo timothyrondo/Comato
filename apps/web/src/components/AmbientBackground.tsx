@@ -1,8 +1,40 @@
 /**
- * The ambient canvas that every glass surface frosts over. A deep emerald-black
- * base with a few large, softly drifting radial glows — no external images, so
- * the app stays self-contained. Fixed and non-interactive; sits behind all UI.
+ * The ambient canvas that every glass surface frosts over. A warm, bright,
+ * softly-blurred light base (cream → peach → soft-orange glows) — no external
+ * network images, so the app stays self-contained and CSP-safe. Fixed and
+ * non-interactive; sits behind all UI.
+ *
+ * ── Dropping in a real background image ────────────────────────────────────
+ * Two optional, self-contained hooks (either resolves to a bundled/inlined
+ * asset — nothing is fetched from a third-party host, so the strict CSP holds):
+ *
+ *   1. Env var — set `VITE_BG_IMAGE` to a URL Vite can resolve at build time,
+ *      e.g. an imported asset URL or a `/public` path:
+ *          VITE_BG_IMAGE=/bg.jpg           (file in apps/web/public/)
+ *      (declared in `src/vite-env.d.ts`).
+ *
+ *   2. Bundled asset — just drop a file at `src/assets/bg.{jpg,jpeg,png,webp,avif}`.
+ *      It is auto-discovered via `import.meta.glob` and bundled by Vite; no code
+ *      change needed. If both are present, `VITE_BG_IMAGE` wins.
+ *
+ * When an image is found it is rendered blurred behind the glass with a warm
+ * scrim so the frosted panels still read. With no image, the CSS mesh below is
+ * the background.
  */
+
+// Auto-discover an optional bundled background (empty object if none exists —
+// the file need not be present, so the build stays green either way).
+const bundledBg = Object.values(
+  import.meta.glob("../assets/bg.{jpg,jpeg,png,webp,avif}", {
+    eager: true,
+    query: "?url",
+    import: "default",
+  }),
+)[0] as string | undefined;
+
+const bgImage =
+  (import.meta.env.VITE_BG_IMAGE as string | undefined) || bundledBg;
+
 export default function AmbientBackground() {
   return (
     <div
@@ -10,52 +42,86 @@ export default function AmbientBackground() {
       className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
       style={{
         background:
-          "radial-gradient(130% 100% at 15% -10%, #0d1c16 0%, #070d0b 45%, #050907 100%)",
+          "radial-gradient(135% 105% at 18% -10%, #fdf3e8 0%, #f8e7d5 42%, #f3ddc9 72%, #efd4bd 100%)",
       }}
     >
-      {/* Primary protective-emerald glow, top-left */}
+      {/* Optional real background image (blurred), sits above the base wash. */}
+      {bgImage && (
+        <>
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage: `url(${bgImage})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              filter: "blur(44px) saturate(118%)",
+              transform: "scale(1.12)",
+            }}
+          />
+          {/* Warm scrim so frosted glass keeps its contrast over the photo. */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(180deg, rgba(255,244,232,0.55) 0%, rgba(250,232,216,0.62) 100%)",
+            }}
+          />
+        </>
+      )}
+
+      {/* Primary orange glow, top-left */}
       <div
-        className="drift absolute -left-[12%] -top-[18%] h-[62vh] w-[62vh] rounded-full"
+        className="drift absolute -left-[12%] -top-[16%] h-[64vh] w-[64vh] rounded-full"
         style={{
           background:
-            "radial-gradient(circle, rgba(35,209,138,0.42) 0%, rgba(35,209,138,0.10) 42%, transparent 70%)",
-          filter: "blur(30px)",
+            "radial-gradient(circle, rgba(241,137,60,0.42) 0%, rgba(241,137,60,0.12) 44%, transparent 70%)",
+          filter: "blur(34px)",
         }}
       />
-      {/* Teal counter-glow, bottom-right */}
+      {/* Coral / pink counter-glow, bottom-right */}
       <div
         className="drift absolute -bottom-[22%] -right-[10%] h-[70vh] w-[70vh] rounded-full"
         style={{
           background:
-            "radial-gradient(circle, rgba(28,150,180,0.30) 0%, rgba(28,150,180,0.08) 45%, transparent 72%)",
-          filter: "blur(34px)",
+            "radial-gradient(circle, rgba(226,105,133,0.28) 0%, rgba(226,105,133,0.08) 46%, transparent 72%)",
+          filter: "blur(38px)",
           animationDelay: "-6s",
         }}
       />
-      {/* Warm deep accent to add depth on the right */}
+      {/* Warm peach highlight to add brightness on the right */}
       <div
-        className="drift absolute right-[18%] top-[30%] h-[40vh] w-[40vh] rounded-full"
+        className="drift absolute right-[16%] top-[26%] h-[44vh] w-[44vh] rounded-full"
         style={{
           background:
-            "radial-gradient(circle, rgba(87,240,168,0.18) 0%, transparent 68%)",
-          filter: "blur(26px)",
+            "radial-gradient(circle, rgba(224,149,89,0.3) 0%, transparent 68%)",
+          filter: "blur(30px)",
           animationDelay: "-11s",
+        }}
+      />
+      {/* Soft cream bloom, lower-left, keeps the base from going flat */}
+      <div
+        className="drift absolute -bottom-[10%] left-[8%] h-[46vh] w-[46vh] rounded-full"
+        style={{
+          background:
+            "radial-gradient(circle, rgba(255,246,235,0.6) 0%, transparent 66%)",
+          filter: "blur(30px)",
+          animationDelay: "-3s",
         }}
       />
       {/* Fine grain to break up the gradients (self-contained SVG noise) */}
       <div
-        className="absolute inset-0 opacity-[0.04] mix-blend-soft-light"
+        className="absolute inset-0 opacity-[0.035] mix-blend-multiply"
         style={{
           backgroundImage:
             "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
         }}
       />
-      {/* Subtle vignette for focus */}
+      {/* Subtle warm vignette for focus (light, not dark) */}
       <div
         className="absolute inset-0"
         style={{
           background:
-            "radial-gradient(120% 90% at 50% 45%, transparent 55%, rgba(0,0,0,0.35) 100%)",
+            "radial-gradient(120% 92% at 50% 42%, transparent 52%, rgba(190,120,70,0.14) 100%)",
         }}
       />
     </div>

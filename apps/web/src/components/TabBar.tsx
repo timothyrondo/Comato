@@ -39,7 +39,7 @@ export default function TabBar({
                 className={
                   "flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200 " +
                   (isActive
-                    ? "bg-gradient-to-b from-accent-bright to-accent text-[#052015] shadow-[0_0_20px_-4px_rgba(35,209,138,0.85)]"
+                    ? "bg-gradient-to-b from-accent-bright to-accent text-[#fff7ef] shadow-[0_0_20px_-4px_rgba(241,137,60,0.85)]"
                     : "text-ink-muted group-hover:text-ink")
                 }
               >

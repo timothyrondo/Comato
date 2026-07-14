@@ -61,7 +61,7 @@ export default function HomeScreen({
             >
               Protected
             </h2>
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-b from-accent-bright to-accent text-[#052015] shadow-[0_0_22px_-4px_rgba(35,209,138,0.9)]">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-b from-accent-bright to-accent text-[#fff7ef] shadow-[0_0_22px_-4px_rgba(241,137,60,0.9)]">
               <ShieldCheck size={20} />
             </span>
           </div>
@@ -96,7 +96,7 @@ export default function HomeScreen({
           value={position.healthFactor.toFixed(2)}
           sub={`${riskCopy[level]} · above liquidation threshold ${position.liquidationHf.toFixed(2)}`}
           badge={
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/18 px-2.5 py-1 text-[11px] font-semibold text-accent-bright">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/18 px-2.5 py-1 text-[11px] font-semibold text-accent-ink">
               <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-accent-bright" />
               {isLive ? "Live" : "Demo"}
             </span>

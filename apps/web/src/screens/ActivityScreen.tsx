@@ -56,7 +56,7 @@ export default function ActivityScreen() {
           value={money(activitySummary.totalSavedUsd)}
           sub={`From ${activitySummary.rescueCount} rescues · liquidation penalty avoided`}
           badge={
-            <span className="rounded-full bg-accent/18 px-2.5 py-1 text-[11px] font-semibold text-accent-bright">
+            <span className="rounded-full bg-accent/18 px-2.5 py-1 text-[11px] font-semibold text-accent-ink">
               +{money(activitySummary.totalSavedUsd, { compact: true })}
             </span>
           }
@@ -92,7 +92,7 @@ export default function ActivityScreen() {
               className={
                 "shrink-0 rounded-full px-4 py-2 text-[13px] font-semibold transition-all " +
                 (active
-                  ? "bg-gradient-to-b from-accent-bright to-accent text-[#052015] shadow-[0_0_22px_-6px_rgba(35,209,138,0.85)]"
+                  ? "bg-gradient-to-b from-accent-bright to-accent text-[#fff7ef] shadow-[0_0_22px_-6px_rgba(241,137,60,0.85)]"
                   : "glass-soft text-ink-soft")
               }
             >

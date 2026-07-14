@@ -12,9 +12,9 @@ const START = -135; // lower-left
 const SWEEP = 270; // clockwise, gap at the bottom
 
 const RISK_HEX: Record<RiskLevel, string> = {
-  safe: "#23d18a",
-  warn: "#f2b750",
-  danger: "#ff5f66",
+  safe: "#2a9d6f",
+  warn: "#e0912f",
+  danger: "#e0524e",
 };
 
 function polar(cx: number, cy: number, r: number, deg: number) {
@@ -120,7 +120,7 @@ export default function HealthRing({
         <path
           d={arc(min, max, 0, 0)}
           fill="none"
-          stroke="rgba(255,255,255,0.08)"
+          stroke="rgba(74,48,30,0.1)"
           strokeWidth={stroke}
           strokeLinecap="round"
         />
@@ -158,7 +158,7 @@ export default function HealthRing({
           y1={liqInner.y}
           x2={liqOuter.x}
           y2={liqOuter.y}
-          stroke="rgba(255,255,255,0.55)"
+          stroke="rgba(74,48,30,0.42)"
           strokeWidth={2.5}
           strokeLinecap="round"
         />
@@ -182,7 +182,7 @@ export default function HealthRing({
             transition: "opacity 260ms ease 120ms",
           }}
         >
-          <circle cx={knob.x} cy={knob.y} r={13} fill="#0a1310" />
+          <circle cx={knob.x} cy={knob.y} r={13} fill="#fdf5ec" />
           <circle
             cx={knob.x}
             cy={knob.y}

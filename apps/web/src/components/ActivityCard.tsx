@@ -20,7 +20,7 @@ export default function ActivityCard({ item }: { item: ActivityItem }) {
   if (isRescue) {
     return (
       <article className="glass-deep flex items-center gap-3.5 rounded-tile p-4 text-on-dark">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-accent/20 text-accent-bright shadow-[0_0_24px_-6px_rgba(35,209,138,0.7)]">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-accent/20 text-accent-ink shadow-[0_0_24px_-6px_rgba(241,137,60,0.7)]">
           <Icon size={21} />
         </span>
         <div className="min-w-0 flex-1">
@@ -28,7 +28,7 @@ export default function ActivityCard({ item }: { item: ActivityItem }) {
             <span className="truncate text-[15px] font-semibold">
               {item.title}
             </span>
-            <span className="tnum shrink-0 text-[15px] font-bold text-accent-bright">
+            <span className="tnum shrink-0 text-[15px] font-bold text-accent-ink">
               {amountLabel}
             </span>
           </div>

@@ -1,18 +1,19 @@
 # apps/web
 
-Premium **responsive** UI for **Comato** (Vite + React + TS + Tailwind v4). One codebase, two layouts sharing the same data + nav state: a **desktop glass dashboard** (≥1024px) and a **glass-restyled mobile app** (<1024px). Style references: `../../../references/ui/desktop(3).png` (desktop, primary), `desktop.png` / `desktop(2).png` (glass), `mobile.png` (phone).
+Premium **responsive** UI for **Comato** (Vite + React + TS + Tailwind v4). One codebase, two layouts sharing the same data + nav state: a **desktop glass dashboard** (≥1024px) and a **glass-restyled mobile app** (<1024px). Style references: `../../../references/ui/desktop.png` (warm light glass, **primary**), `desktop(2).png` / `desktop(3).png` (other glass refs), `mobile.png` (phone).
 
-## Design system — glassmorphism (visionOS)
-Frosted translucent surfaces over a deep, blurred **emerald-black** canvas. Protective-green accent adapted to glass (emerald glow/gradient on dark). Tokens + glass utilities live in `src/index.css`.
-- **Tokens (`@theme`)**: dark canvas `--color-bg`; **light** ink on dark (`--color-ink`/`-soft`/`-muted`); emerald accent (`--color-accent` `#23d18a`, `-bright`, `-ink` for text, `-soft` translucent tint); glass hairlines (`--color-line` = rgba white); risk (`--color-safe`/`-warn`/`-danger`, brightened); `--radius-panel` (32px, desktop). Fonts unchanged (Plus Jakarta Sans display + Inter body). The "dark" tone tokens are repurposed as a **deep frosted well**.
+## Design system — warm-light glassmorphism (visionOS)
+Frosted translucent **white** surfaces over a soft, bright, blurred **warm** canvas (cream → peach → soft-orange). **Orange** brand accent with a **pink/coral** secondary; warm dark-brown ink on light. Tokens + glass utilities live in `src/index.css`.
+- **Tokens (`@theme`)**: warm-light canvas `--color-bg` `#f7ede2` / `-bg-2` `#f4e0cf`; warm dark-brown ink on light (`--color-ink` `#33261d` / `-soft` / `-muted`); **orange** accent (`--color-accent` `#f1893c`, `-bright` `#ff9a4a` for gradients/dots/glows, `-ink` `#bd5713` = readable orange TEXT on light glass, `-deep` `#d9702a`, `-soft` translucent tint); **pink/coral** secondary (`--color-accent-2` `#e26985`, `-2-ink` `#c74d6a`, `-2-soft`); warm secondary orange `--color-accent-warm` `#e09559`; glass hairlines (`--color-line` = rgba warm-brown on light); risk warm-tuned & legible on light (`--color-safe` `#2a9d6f`, `-warn` `#e0912f`, `-danger` `#e0524e`); `--radius-panel` (32px, desktop). Fonts unchanged (Plus Jakarta Sans display + Inter body). The "dark" tone tokens (`--color-dark*`, `--color-on-dark*`) are repurposed as a **warm peach emphasis tile with dark warm ink**.
 - **Glass utility classes** (the core of the look; compose with Tailwind layout utils, they carry their own bg/border/shadow — don't add `bg-*`/`shadow-*` on top):
-  - `.glass` — primary frosted panel (30px blur, top light edge, deep shadow). Big containers, cards, sidebar, tab bar.
-  - `.glass-soft` — lighter tile (18px blur). StatTile `light`, light activity rows, buttons.
-  - `.glass-deep` — deep dark-tinted well (emphasis). StatTile `dark`, rescue cards, profile, agent card. Pair with `text-on-dark`.
-  - `.glass-accent` — emerald-tinted glass with glow. Hero, accent tiles, active nav, rescue explainer.
-  - `.glass-chip` — small inset chip (wallet rows, badges). `.btn-primary` — emerald gradient CTA + protection glow.
-- **Patterns**: generous rounding, soft/deep shadows, top light edges, emerald glow on primary actions & the HF ring. Signature = the vital-signs motif: **Health Factor ring** (glowing risk zones) + **ECG PulseLine** + the desktop **Health Factor trace** chart.
-- `AmbientBackground` renders the shared fixed canvas (dark gradient + drifting blurred emerald/teal glows + faint noise) that every glass surface frosts over — no external images.
+  - `.glass` — primary frosted **white** panel (30px blur, bright top edge, soft warm shadow). Big containers, cards, sidebar, tab bar.
+  - `.glass-soft` — lighter white tile (18px blur). StatTile `light`, light activity rows, buttons.
+  - `.glass-deep` — **warm peach emphasis tile** (soft cream/peach glass, dark warm ink). StatTile `dark`, rescue cards, profile, agent card. Pair with `text-on-dark` (now dark ink) and `text-accent-ink` for emphasis numbers.
+  - `.glass-accent` — **orange-tinted** glass with soft glow. Hero, accent tiles, active nav, rescue explainer. Dark ink reads on it.
+  - `.glass-chip` — small inset white chip (wallet rows, badges). `.btn-primary` — **orange** gradient CTA + warm glow (light `#fff7ef` text).
+- **Patterns**: generous rounding, soft warm shadows, bright top light edges, orange glow on primary actions & the HF ring, an orange→coral chart line. Signature = the vital-signs motif: **Health Factor ring** (glowing risk zones) + **ECG PulseLine** + the desktop **Health Factor trace** chart. Text/icons on an orange surface use the warm-white `#fff7ef`; deep orange `text-accent-ink` is the readable accent text on light glass.
+- `AmbientBackground` renders the shared fixed canvas (warm cream→peach base + drifting blurred orange/coral/peach glows + faint noise + light warm vignette) that every glass surface frosts over — self-contained, no network images.
+  - **Drop-in background image (CSP-safe):** either set env `VITE_BG_IMAGE` to a Vite-resolvable URL (an imported asset URL or a `/public` path like `/bg.jpg`), **or** just place a file at `src/assets/bg.{jpg,jpeg,png,webp,avif}` (auto-discovered via `import.meta.glob`, bundled by Vite — no code change). If present it renders **blurred behind the glass** with a warm scrim; if both, `VITE_BG_IMAGE` wins. Absent ⇒ the CSS mesh. No external/CDN hosts (strict CSP holds). Declared in `src/vite-env.d.ts`.
 
 ## Structure
 - `src/App.tsx` — holds `screen` state; `useIsDesktop()` (`lib/useIsDesktop.ts`, matchMedia ≥1024px) switches between `DesktopApp` and the mobile `PhoneFrame` + screens + `TabBar`. `AmbientBackground` is shared.
@@ -51,4 +52,4 @@ Minimum to go live: `VITE_RPC_URL` + `VITE_SUBSCRIBER_ADDR` + one of (`VITE_POLI
 - **`bun run demo`** (from the repo root) — fork Celo + deploy + real rescue + serve the live UI. See `DEMO.md`.
 
 ## Rules
-- Preserve the premium **glass** look across **both** layouts (desktop dashboard + mobile) — frosted depth, blur, light edges, emerald glow; not flat low-opacity cards. Use the `.glass-*` utilities, don't reinvent surfaces. UI copy in clear, natural English. Import addresses/ABIs, don't guess them. Author identity: **Timo / timothyrondo**.
+- Preserve the premium **warm-light glass** look across **both** layouts (desktop dashboard + mobile) — frosted white depth, blur, bright top edges, orange glow; not flat low-opacity cards. Keep the **orange** brand accent + **pink/coral** secondary; no emerald/green (a warm green-teal is allowed only for the risk-"safe" state's legibility). Use the `.glass-*` utilities, don't reinvent surfaces. UI copy in clear, natural English. Import addresses/ABIs, don't guess them. Author identity: **Timo / timothyrondo**.

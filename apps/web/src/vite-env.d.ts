@@ -20,6 +20,13 @@ interface ImportMetaEnv {
   readonly VITE_POLICY_ID?: string;
   /** First block to scan for RescueExecuted logs (keeps getLogs off Celo history). */
   readonly VITE_FROM_BLOCK?: string;
+  /**
+   * Optional background image for the warm ambient canvas. A Vite-resolvable
+   * URL (imported asset URL or a `/public` path like `/bg.jpg`). Rendered
+   * blurred behind the glass; absent ⇒ the self-contained CSS mesh is used.
+   * See `components/AmbientBackground.tsx`.
+   */
+  readonly VITE_BG_IMAGE?: string;
 }
 
 interface ImportMeta {

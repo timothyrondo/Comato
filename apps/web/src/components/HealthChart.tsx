@@ -116,13 +116,13 @@ export default function HealthChart({
     >
       <defs>
         <linearGradient id="hc-area" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#23d18a" stopOpacity="0.42" />
-          <stop offset="55%" stopColor="#23d18a" stopOpacity="0.12" />
-          <stop offset="100%" stopColor="#23d18a" stopOpacity="0" />
+          <stop offset="0%" stopColor="#f1893c" stopOpacity="0.34" />
+          <stop offset="55%" stopColor="#f1893c" stopOpacity="0.1" />
+          <stop offset="100%" stopColor="#f1893c" stopOpacity="0" />
         </linearGradient>
         <linearGradient id="hc-line" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#57f0a8" />
-          <stop offset="100%" stopColor="#23d18a" />
+          <stop offset="0%" stopColor="#ff9a4a" />
+          <stop offset="100%" stopColor="#e26985" />
         </linearGradient>
         <filter id="hc-glow" x="-20%" y="-40%" width="140%" height="180%">
           <feGaussianBlur stdDeviation="5" result="b" />
@@ -139,8 +139,8 @@ export default function HealthChart({
         y1={rescueY}
         x2={W - padX}
         y2={rescueY}
-        stroke="#f2b750"
-        strokeOpacity="0.5"
+        stroke="#e0912f"
+        strokeOpacity="0.6"
         strokeWidth="1.25"
         strokeDasharray="2 6"
       />
@@ -149,8 +149,8 @@ export default function HealthChart({
         y={rescueY - 6}
         fontSize="11"
         fontWeight="600"
-        fill="#f2b750"
-        fillOpacity="0.85"
+        fill="#c67a1e"
+        fillOpacity="0.9"
       >
         Rescue {rescueHf.toFixed(2)}
       </text>
@@ -159,8 +159,8 @@ export default function HealthChart({
         y1={liqY}
         x2={W - padX}
         y2={liqY}
-        stroke="#ff5f66"
-        strokeOpacity="0.5"
+        stroke="#e0524e"
+        strokeOpacity="0.55"
         strokeWidth="1.25"
         strokeDasharray="2 6"
       />
@@ -169,8 +169,8 @@ export default function HealthChart({
         y={liqY - 6}
         fontSize="11"
         fontWeight="600"
-        fill="#ff5f66"
-        fillOpacity="0.85"
+        fill="#d0433f"
+        fillOpacity="0.9"
       >
         Liquidation {liquidationHf.toFixed(2)}
       </text>
@@ -194,20 +194,20 @@ export default function HealthChart({
           cx={coords[i].x}
           cy={coords[i].y}
           r="3.5"
-          fill="#ff5f66"
-          stroke="#0a1310"
+          fill="#e0524e"
+          stroke="#fdf5ec"
           strokeWidth="2"
         />
       ))}
 
       {/* Current value dot */}
-      <circle cx={last.x} cy={last.y} r="9" fill="#23d18a" fillOpacity="0.25" />
+      <circle cx={last.x} cy={last.y} r="9" fill="#f1893c" fillOpacity="0.25" />
       <circle
         cx={last.x}
         cy={last.y}
         r="4.5"
-        fill="#57f0a8"
-        stroke="#0a1310"
+        fill="#ff9a4a"
+        stroke="#fdf5ec"
         strokeWidth="2"
         filter="url(#hc-glow)"
       />

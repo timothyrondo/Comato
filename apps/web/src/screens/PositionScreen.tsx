@@ -75,9 +75,9 @@ export default function PositionScreen({
           rescueHf={position.rescueHf}
         />
         <div className="mt-2 flex items-start justify-around border-t border-line pt-4">
-          <LegendDot color="#e5484d" label="Critical" range="< 1.20" />
-          <LegendDot color="#e3a03a" label="Caution" range="1.20–1.50" />
-          <LegendDot color="#17a672" label="Safe" range="> 1.50" />
+          <LegendDot color="#e0524e" label="Critical" range="< 1.20" />
+          <LegendDot color="#e0912f" label="Caution" range="1.20–1.50" />
+          <LegendDot color="#2a9d6f" label="Safe" range="> 1.50" />
         </div>
         <p className="mt-3 text-center text-[12px] leading-snug text-ink-muted">
           The dark line marks{" "}
@@ -139,7 +139,7 @@ export default function PositionScreen({
       {/* Agent card (mirrors the reference's bottom summary card) */}
       <section className="rise mt-4" style={{ animationDelay: "220ms" }}>
         <div className="glass-deep flex items-center gap-3.5 rounded-card p-4 text-on-dark">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent/20 text-accent-bright shadow-[0_0_24px_-6px_rgba(35,209,138,0.7)]">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent/20 text-accent-ink shadow-[0_0_24px_-6px_rgba(241,137,60,0.7)]">
             <ShieldCheck size={22} />
           </span>
           <div className="min-w-0 flex-1">
@@ -157,7 +157,7 @@ export default function PositionScreen({
                 Interval
               </div>
             </div>
-            <div className="h-8 w-px bg-white/10" />
+            <div className="h-8 w-px bg-ink/10" />
             <div>
               <div className="tnum text-[15px] font-bold">
                 {position.protectedSinceDays}d

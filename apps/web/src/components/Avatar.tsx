@@ -13,12 +13,12 @@ export default function Avatar({
   const initial = name.trim().charAt(0).toUpperCase();
   return (
     <span
-      className="relative inline-flex shrink-0 items-center justify-center rounded-full font-display font-bold text-on-dark"
+      className="relative inline-flex shrink-0 items-center justify-center rounded-full font-display font-bold text-white"
       style={{
         width: size,
         height: size,
         fontSize: size * 0.4,
-        background: "linear-gradient(140deg, #1d2c23 0%, #17a672 130%)",
+        background: "linear-gradient(140deg, #f4a35f 0%, #e26985 130%)",
         boxShadow: ring ? "0 0 0 3px var(--color-surface)" : undefined,
       }}
       aria-hidden="true"
