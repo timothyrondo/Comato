@@ -7,7 +7,7 @@ export const CELO_MAINNET_CHAIN_ID = 42220;
 export const CELO_SEPOLIA_CHAIN_ID = 11142220;
 
 /**
- * x402 facilitator API host — MUST use Celo's (not thirdweb's default) or Track 2 won't count.
+ * x402 facilitator API host — MUST use Celo's own facilitator or Track 2 won't count.
  * Use the `api.` host: the bare `x402.celo.org` is a landing page (HTML) that crashes the SDK.
  * Verified: `api.x402.celo.org/supported` returns JSON listing the eip155:42220 relayer below.
  */
