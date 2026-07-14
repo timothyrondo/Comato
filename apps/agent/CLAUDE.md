@@ -12,7 +12,7 @@ positions, and run the treasury volume engine. Runtime: **bun + viem**.
 
 | Module | File | Role |
 | --- | --- | --- |
-| Config | `src/config.ts` | Env-only, validated, typed `Config`. Safe defaults (DRY_RUN on). |
+| Config | `src/config.ts` | Loads secrets/toggles/per-deploy from env; pulls all tuning from `src/defaults.ts`. Validated, typed `Config`. Safe defaults (DRY_RUN on). |
 | Chain | `src/chain.ts` | viem public (reads) + wallet (writes) clients on Celo. |
 | Tagger | `src/tagger.ts` | ERC-8021 `toDataSuffix`/`verifyTx` — the **C1** mechanism. |
 | Tx sender | `src/tx.ts` | The only write path: encode → append tag → EOA-direct send. DRY_RUN aware. |
@@ -81,12 +81,16 @@ USD stable pair at 6/6 decimals (`assertStablePair`, O7) — the `amountOutMinim
 ## Run
 
 ```bash
-cp .env.example .env      # fill ATTRIBUTION_CODE (+ COMATO_PRIVATE_KEY to send)
+cp .env.example .env      # fill ATTRIBUTION_CODE + SUBSCRIBERS (+ COMATO_PRIVATE_KEY to send)
 bun install
 bun run dev               # start the agent (DRY_RUN=true by default → no broadcasts)
 bun test                  # tagger / rescue-eligibility / treasury-sizing (mocked RPC)
 bun run typecheck         # tsc --noEmit
 ```
+
+> `.env` holds only secrets + per-deployment values + operational toggles. **Tuning
+> params (intervals, rescue/treasury/x402 knobs, chain id, addresses) live in
+> `src/defaults.ts` (`DEFAULTS`)** — adjust them there, not in `.env`.
 
 - **Read-only mode:** omit `COMATO_PRIVATE_KEY` → monitors HF only, DRY_RUN forced.
 - **Live sending:** set a funded `COMATO_PRIVATE_KEY` and `DRY_RUN=false`, then enable the

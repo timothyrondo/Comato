@@ -1,16 +1,19 @@
 /**
- * Configuration — env only. No secrets in code, no config files with keys.
+ * Configuration. Env carries only secrets, genuinely per-deployment values, and
+ * operational toggles. Every pure *tuning* value lives in `./defaults.ts`
+ * (`DEFAULTS`) — the single source of truth — and is used here directly.
  *
  * Safe-by-default posture:
  *   - DRY_RUN defaults to TRUE: `bun run dev` never sends a real tx unless you
  *     explicitly set DRY_RUN=false. A demo can run with no funds at risk.
- *   - Rescue / treasury / x402 are each OFF unless their env is present.
+ *   - Rescue / treasury / x402 are each OFF unless their toggle is set.
  *   - If COMATO_PRIVATE_KEY is absent, the agent runs read-only (monitor only)
  *     and forces DRY_RUN — it can observe health factors but cannot send txs.
  */
 
 import { parseUnits, isAddress, getAddress, type Address, type Hex } from "viem";
-import { MAINNET, X402_FACILITATOR_URL, X402_RELAYER } from "@comato/shared/addresses";
+import { MAINNET } from "@comato/shared/addresses";
+import { DEFAULTS } from "./defaults.ts";
 import { assertStablePair } from "./treasury.ts";
 import type { LogLevel } from "./logger.ts";
 
@@ -38,14 +41,6 @@ function bool(name: string, fallback: boolean): boolean {
   const v = process.env[name];
   if (v === undefined || v === "") return fallback;
   return ["1", "true", "yes", "on"].includes(v.toLowerCase());
-}
-
-function int(name: string, fallback: number): number {
-  const v = process.env[name];
-  if (v === undefined || v === "") return fallback;
-  const n = Number.parseInt(v, 10);
-  if (!Number.isFinite(n)) throw new Error(`Env ${name} must be an integer, got "${v}"`);
-  return n;
 }
 
 function addr(value: string, ctx: string): Address {
@@ -219,63 +214,57 @@ export function loadConfig(): Config {
     };
   });
 
-  const treasuryDecimalsA = int("TREASURY_TOKEN_A_DECIMALS", 6);
-  const treasuryDecimalsB = int("TREASURY_TOKEN_B_DECIMALS", 6);
-
   const executorRaw = optRaw("EXECUTOR_ADDRESS");
   const policyRaw = optRaw("POLICY_ADDRESS");
 
   const config: Config = {
-    chainId: int("CHAIN_ID", 42220),
+    chainId: DEFAULTS.chainId,
     rpcUrl: opt("CELO_RPC", MAINNET.rpc),
     attributionCode,
     privateKey,
     dryRun,
     logLevel: opt("LOG_LEVEL", "info") as LogLevel,
 
-    monitorIntervalMs: int("MONITOR_INTERVAL_MS", 30_000),
+    monitorIntervalMs: DEFAULTS.monitorIntervalMs,
     subscribers,
 
     rescue: {
       enabled: bool("RESCUE_ENABLED", false),
-      distressHf: parseUnits(opt("RESCUE_DISTRESS_HF", "1.05"), 18),
-      maxAmount: parseUnits(opt("RESCUE_MAX_AMOUNT", "50"), int("RESCUE_ASSET_DECIMALS", 6)),
-      cooldownMs: int("RESCUE_COOLDOWN_MS", 3_600_000),
-      maxPerWindow: int("RESCUE_MAX_PER_WINDOW", 3),
-      windowMs: int("RESCUE_WINDOW_MS", 86_400_000),
-      viaExecutor: bool("RESCUE_VIA_EXECUTOR", false),
+      distressHf: parseUnits(DEFAULTS.rescue.distressHf, 18),
+      maxAmount: parseUnits(DEFAULTS.rescue.maxAmount, DEFAULTS.rescue.assetDecimals),
+      cooldownMs: DEFAULTS.rescue.cooldownMs,
+      maxPerWindow: DEFAULTS.rescue.maxPerWindow,
+      windowMs: DEFAULTS.rescue.windowMs,
+      viaExecutor: DEFAULTS.rescue.viaExecutor,
       executorAddress: executorRaw ? addr(executorRaw, "EXECUTOR_ADDRESS") : undefined,
       policyAddress: policyRaw ? addr(policyRaw, "POLICY_ADDRESS") : undefined,
-      requirePremium: bool("RESCUE_REQUIRE_PREMIUM", true),
+      requirePremium: DEFAULTS.rescue.requirePremium,
       // Empty string ("") disables on-disk persistence (in-memory limiter only).
-      rateLimitStatePath: opt("RESCUE_STATE_FILE", ".comato/rate-limiter-state.json"),
+      rateLimitStatePath: DEFAULTS.rescue.stateFile,
     },
 
     treasury: {
       enabled: bool("TREASURY_ENABLED", false),
-      intervalMs: int("TREASURY_INTERVAL_MS", 60_000),
-      tokenA: addr(opt("TREASURY_TOKEN_A", MAINNET.tokens.USDC), "TREASURY_TOKEN_A"),
-      tokenB: addr(opt("TREASURY_TOKEN_B", MAINNET.tokens.USDT), "TREASURY_TOKEN_B"),
-      swapAmount: parseUnits(opt("TREASURY_SWAP_AMOUNT", "1"), treasuryDecimalsA),
-      decimalsA: treasuryDecimalsA,
-      decimalsB: treasuryDecimalsB,
-      poolFee: int("TREASURY_POOL_FEE", 100),
-      slippageBps: int("TREASURY_SLIPPAGE_BPS", 50),
-      roundTrip: bool("TREASURY_ROUND_TRIP", true),
-      routerAddress: addr(
-        opt("TREASURY_ROUTER", MAINNET.uniswapV3.swapRouter02),
-        "TREASURY_ROUTER",
-      ),
-      minReserve: parseUnits(opt("TREASURY_MIN_RESERVE", "0"), treasuryDecimalsA),
+      intervalMs: DEFAULTS.treasury.intervalMs,
+      tokenA: addr(DEFAULTS.treasury.tokenA, "TREASURY_TOKEN_A"),
+      tokenB: addr(DEFAULTS.treasury.tokenB, "TREASURY_TOKEN_B"),
+      swapAmount: parseUnits(DEFAULTS.treasury.swapAmount, DEFAULTS.treasury.decimalsA),
+      decimalsA: DEFAULTS.treasury.decimalsA,
+      decimalsB: DEFAULTS.treasury.decimalsB,
+      poolFee: DEFAULTS.treasury.poolFee,
+      slippageBps: DEFAULTS.treasury.slippageBps,
+      roundTrip: DEFAULTS.treasury.roundTrip,
+      routerAddress: addr(DEFAULTS.treasury.router, "TREASURY_ROUTER"),
+      minReserve: parseUnits(DEFAULTS.treasury.minReserve, DEFAULTS.treasury.decimalsA),
     },
 
     x402: {
       enabled: bool("X402_ENABLED", Boolean(optRaw("X402_DATA_URL"))),
       dataUrl: optRaw("X402_DATA_URL"),
-      maxValue: BigInt(opt("X402_MAX_VALUE", "100000")), // base units (e.g. 0.10 USDC @ 6dec)
-      requestTimeoutMs: int("X402_REQUEST_TIMEOUT_MS", 15_000),
-      facilitatorUrl: opt("X402_FACILITATOR_URL", X402_FACILITATOR_URL),
-      relayer: addr(X402_RELAYER, "X402_RELAYER"),
+      maxValue: BigInt(DEFAULTS.x402.maxValue), // base units (e.g. 0.10 USDC @ 6dec)
+      requestTimeoutMs: DEFAULTS.x402.requestTimeoutMs,
+      facilitatorUrl: DEFAULTS.x402.facilitatorUrl,
+      relayer: addr(DEFAULTS.x402.relayer, "X402_RELAYER"),
     },
   };
 
