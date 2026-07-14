@@ -21,7 +21,7 @@ Each stack is separated; every relevant folder has its own `CLAUDE.md`.
 
 ## Key on-chain rules (drive the design)
 - On-chain volume attribution counts only transfers whose `from` equals the tx-sending EOA, inside ERC-8021 tagged transactions → value-moving actions are **EOA-direct**, never routed through a contract intermediary.
-- x402 payments must route through the **Celo facilitator** `https://api.x402.celo.org` (relayer `0x0d74d5cefd2e7f24e623330ebe3d8d4cb45ffb48`), not thirdweb's default facilitator.
+- x402 stack is the **`@x402/*` SDK** (x402-rs family) end-to-end: `@x402/core`+`@x402/evm` viem client, `@x402/hono` server. Payments MUST route through the **Celo facilitator** `https://api.x402.celo.org` (relayer `0x0d74d5cefd2e7f24e623330ebe3d8d4cb45ffb48`) with an `X-API-Key` on `/settle` — any other facilitator relayer won't count for Track 2.
 - x402 tokens: **USDC / USDT** (6 decimals, EIP-3009). Not cUSD / USDm.
 - Attribution: `@celo/attribution-tags` `toDataSuffix` + `verifyTx`. Marker `0x80218021802180218021802180218021`.
 
