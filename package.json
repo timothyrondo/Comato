@@ -18,6 +18,12 @@
     "agent:dev": "cd apps/agent && bun run dev",
     "server:dev": "cd apps/server && bun run dev",
     "e2e": "cd e2e && bun run src/e2e.ts",
-    "demo": "cd e2e && bun run src/demo.ts"
+    "demo": "cd e2e && bun run src/demo.ts",
+    "test:agent": "cd apps/agent && bun test",
+    "test:server": "cd apps/server && bun test",
+    "test:web": "cd apps/web && bun test",
+    "test": "bun run test:agent && bun run test:server && bun run test:web",
+    "test:coverage": "echo '── agent' && bun run test:agent && echo '── server' && bun run test:server && echo '── web' && bun run test:web",
+    "typecheck": "cd apps/agent && bun run typecheck && cd ../server && bun run typecheck && cd ../web && bun run build"
   }
 }
