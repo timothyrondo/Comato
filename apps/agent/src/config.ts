@@ -142,9 +142,6 @@ export interface Config {
     enabled: boolean;
     /** The priced data endpoint the agent buys risk/price data from. */
     dataUrl?: string;
-    /** thirdweb client credentials (RPC infra for signing the payment). */
-    thirdwebClientId?: string;
-    thirdwebSecretKey?: string;
     /** Max payment per request, in token base units (safety cap). */
     maxValue: bigint;
     /**
@@ -275,8 +272,6 @@ export function loadConfig(): Config {
     x402: {
       enabled: bool("X402_ENABLED", Boolean(optRaw("X402_DATA_URL"))),
       dataUrl: optRaw("X402_DATA_URL"),
-      thirdwebClientId: optRaw("THIRDWEB_CLIENT_ID"),
-      thirdwebSecretKey: optRaw("THIRDWEB_SECRET_KEY"),
       maxValue: BigInt(opt("X402_MAX_VALUE", "100000")), // base units (e.g. 0.10 USDC @ 6dec)
       requestTimeoutMs: int("X402_REQUEST_TIMEOUT_MS", 15_000),
       facilitatorUrl: opt("X402_FACILITATOR_URL", X402_FACILITATOR_URL),

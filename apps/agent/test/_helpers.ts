@@ -55,8 +55,6 @@ export function makeConfig(overrides: Partial<Config> = {}): Config {
     x402: {
       enabled: false,
       dataUrl: undefined,
-      thirdwebClientId: undefined,
-      thirdwebSecretKey: undefined,
       maxValue: 100_000n,
       requestTimeoutMs: 15_000,
       facilitatorUrl: X402_FACILITATOR_URL,

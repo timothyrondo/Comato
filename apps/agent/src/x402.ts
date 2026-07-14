@@ -1,32 +1,33 @@
 /**
  * x402 client — the payer side of Track 2 (C2) plus free Track 1 (C3).
  *
- * The monitor buys price/risk data per poll with `thirdweb/x402`
- * `wrapFetchWithPayment`, signing an EIP-3009 authorization from COMATO_WALLET.
+ * The monitor buys price/risk data per poll with the official `@x402/*` SDK
+ * (viem-based — the same stack the resource server uses), signing an EIP-3009
+ * `transferWithAuthorization` from COMATO_WALLET. This is the exact client family
+ * `x402.celo.org` runs; no third-party payment wrapper is involved.
  *
- * IMPORTANT nuance about the facilitator (verified against thirdweb v5 source):
- *   `wrapFetchWithPayment(fetch, client, wallet, opts)` has NO client-side
- *   facilitator parameter. In x402 the facilitator is chosen by the RESOURCE
- *   SERVER (the data endpoint): the client signs, the server settles via ITS
- *   configured facilitator. So for the payer-side count to register, the data
- *   endpoint MUST be configured to settle through `https://x402.celo.org`
- *   (relayer 0x0d74…FB48). In the Comato system that endpoint is Comato-operated
- *   (see apps/server), so it is wired to the Celo facilitator.
+ * IMPORTANT nuance about the facilitator: the x402 client only SIGNS the payment;
+ * it does not choose the facilitator. In x402 the facilitator is selected by the
+ * RESOURCE SERVER (the data endpoint): the client signs, the server settles via
+ * ITS configured facilitator. So for the payer-side count to register, the data
+ * endpoint MUST be configured to settle through `https://api.x402.celo.org`
+ * (relayer 0x0d74…FB48). In the Comato system that endpoint is Comato-operated
+ * (see apps/server), so it is wired to the Celo facilitator.
  *
  * We still enforce C2 defensively: after each paid request we decode the
- * settlement tx hash from the `X-PAYMENT-RESPONSE` header and verify on-chain
- * that its `from` is the Celo relayer. A mismatch => it settled via the wrong
+ * settlement tx hash from the `PAYMENT-RESPONSE` header and verify on-chain that
+ * its `from` is the Celo relayer. A mismatch => it settled via the wrong
  * facilitator and WON'T count for Track 2; we log a loud warning.
  */
 
 import { getAddress, type Address, type PublicClient } from "viem";
-import { createThirdwebClient, defineChain, type ThirdwebClient } from "thirdweb";
-import { privateKeyToAccount, createWalletAdapter } from "thirdweb/wallets";
-import { wrapFetchWithPayment } from "thirdweb/x402";
+import { privateKeyToAccount } from "viem/accounts";
+import { x402Client } from "@x402/core/client";
+import { x402HTTPClient } from "@x402/core/http";
+import { ExactEvmScheme } from "@x402/evm/exact/client";
+import { toClientEvmSigner } from "@x402/evm";
 import type { Config } from "./config.ts";
 import type { Logger } from "./logger.ts";
-
-const PAYMENT_RESPONSE_HEADER = "x-payment-response";
 
 export interface DataResult {
   ok: boolean;
@@ -37,7 +38,7 @@ export interface DataResult {
 }
 
 export class X402Client {
-  private fetchWithPay?: typeof globalThis.fetch;
+  private client?: x402HTTPClient;
   private enabled = false;
 
   constructor(
@@ -66,38 +67,28 @@ export class X402Client {
       this.log.warn("x402 disabled: X402_DATA_URL not set", { event: "x402.no_url" });
       return;
     }
-    if (!x.thirdwebClientId && !x.thirdwebSecretKey) {
-      this.log.warn("x402 disabled: THIRDWEB_CLIENT_ID/SECRET_KEY not set", { event: "x402.no_thirdweb" });
-      return;
-    }
 
-    const client: ThirdwebClient = createThirdwebClient(
-      x.thirdwebSecretKey ? { secretKey: x.thirdwebSecretKey } : { clientId: x.thirdwebClientId! },
-    );
-    const chain = defineChain({ id: this.config.chainId, rpc: this.config.rpcUrl });
-    const account = privateKeyToAccount({ client, privateKey: this.config.privateKey });
-
-    const wallet = createWalletAdapter({
-      client,
-      adaptedAccount: account,
-      chain,
-      onDisconnect: () => {},
-      switchChain: () => {
-        // Single-chain agent; a switch request means the data endpoint priced on
-        // another chain — refuse rather than silently pay elsewhere.
-        throw new Error("x402: chain switch not supported (Celo only)");
-      },
-    });
-
-    this.fetchWithPay = wrapFetchWithPayment(globalThis.fetch, client, wallet, {
-      maxValue: x.maxValue,
-    }) as unknown as typeof globalThis.fetch;
+    const account = privateKeyToAccount(this.config.privateKey);
+    const signer = toClientEvmSigner(account);
+    // v2 CAIP-2 network id (e.g. eip155:42220) derived from the configured chain —
+    // matches the network the resource server advertises in its 402.
+    const network = `eip155:${this.config.chainId}` as `${string}:${string}`;
+    const core = new x402Client()
+      .register(network, new ExactEvmScheme(signer))
+      // maxValue cap (safety): refuse any accepted requirement above the per-request
+      // ceiling. If every option exceeds it, the selector has nothing and
+      // createPaymentPayload throws -> buyData catches and declines to pay.
+      .registerPolicy((_version, requirements) =>
+        requirements.filter((r) => BigInt(r.amount) <= x.maxValue),
+      );
+    this.client = new x402HTTPClient(core);
 
     this.enabled = true;
     this.log.info("x402 client ready", {
       event: "x402.ready",
       dataUrl: x.dataUrl,
       maxValue: x.maxValue,
+      payer: account.address,
       facilitatorUrl: x.facilitatorUrl,
       note: "facilitator is server-side; settlements verified against Celo relayer",
     });
@@ -109,18 +100,47 @@ export class X402Client {
    */
   async buyData(url?: string): Promise<DataResult> {
     const target = url ?? this.config.x402.dataUrl;
-    if (!this.enabled || !this.fetchWithPay || !target) {
+    const client = this.client;
+    if (!this.enabled || !client || !target) {
       return { ok: false, status: 0 };
     }
+
     // Bound the whole paid request (initial 402 + retry) with a hard timeout so a
     // hostile/hung data endpoint cannot stall the (non-overlapping) monitor->rescue
-    // loop or block graceful shutdown. wrapFetchWithPayment forwards `init` — incl.
-    // `signal` — to both the initial and the payment-retry fetch (verified against
-    // thirdweb v5 source), so one signal covers the entire exchange.
-    const res = await this.fetchWithPay(target, {
-      signal: AbortSignal.timeout(this.config.x402.requestTimeoutMs),
-    });
-    const settlementTx = this.parseSettlementTx(res);
+    // loop or block graceful shutdown. The same signal covers both fetches.
+    const signal = AbortSignal.timeout(this.config.x402.requestTimeoutMs);
+    const init: RequestInit = { signal };
+
+    let res = await fetch(target, init);
+
+    if (res.status === 402) {
+      let body: unknown;
+      try {
+        body = await res.clone().json();
+      } catch {
+        body = undefined;
+      }
+      const required = client.getPaymentRequiredResponse((n) => res.headers.get(n), body);
+      try {
+        const payload = await client.createPaymentPayload(required);
+        res = await fetch(target, {
+          ...init,
+          headers: { ...client.encodePaymentSignatureHeader(payload) },
+        });
+      } catch (err) {
+        // No affordable/supported requirement (e.g. price above X402_MAX_VALUE) —
+        // decline to pay rather than sign an over-cap or unsupported authorization.
+        this.log.warn("x402 payment declined (over max value or unsupported requirement)", {
+          event: "x402.declined",
+          url: target,
+          maxValue: this.config.x402.maxValue,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return { ok: false, status: 402 };
+      }
+    }
+
+    const settlementTx = this.parseSettlementTx(client, res);
     let relayerVerified: boolean | undefined;
     if (settlementTx) relayerVerified = await this.verifyRelayer(settlementTx);
 
@@ -142,16 +162,11 @@ export class X402Client {
     return { ok: res.ok, status: res.status, data, settlementTx, relayerVerified };
   }
 
-  /** Decode the settlement tx hash from the base64 X-PAYMENT-RESPONSE header. */
-  private parseSettlementTx(res: Response): `0x${string}` | undefined {
-    const header = res.headers.get(PAYMENT_RESPONSE_HEADER);
-    if (!header) return undefined;
+  /** Decode the settlement tx hash from the x402 PAYMENT-RESPONSE header, if present. */
+  private parseSettlementTx(client: x402HTTPClient, res: Response): `0x${string}` | undefined {
     try {
-      const json = JSON.parse(Buffer.from(header, "base64").toString("utf8")) as {
-        transaction?: string;
-        txHash?: string;
-      };
-      const tx = json.transaction ?? json.txHash;
+      const settle = client.getPaymentSettleResponse((n) => res.headers.get(n));
+      const tx = settle.transaction;
       return tx && /^0x[0-9a-fA-F]{64}$/.test(tx) ? (tx as `0x${string}`) : undefined;
     } catch {
       return undefined;

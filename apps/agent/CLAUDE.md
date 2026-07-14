@@ -38,10 +38,11 @@ one and the action is invisible on the leaderboard.
   - Counting paths: `treasury.ts` (`exactInputSingle` — router pulls `tokenIn` from the
     EOA) and `rescue.ts` (EOA-direct `repay(onBehalfOf)` — Aave pulls from the EOA).
 - **C2 — x402 count needs the Celo facilitator relayer + our wallet on a leg.**
-  - `x402.ts` pays with `COMATO_WALLET` as payer via `thirdweb/x402 wrapFetchWithPayment`.
-  - ⚠️ The facilitator is chosen by the **resource server**, not the client (verified
-    against thirdweb v5 source — `wrapFetchWithPayment` has no facilitator param). So the
-    data endpoint must settle through `https://x402.celo.org`. The agent **verifies**
+  - `x402.ts` pays with `COMATO_WALLET` as payer via the official `@x402/*` SDK
+    (`@x402/core` + `@x402/evm`, viem-based) — signs an EIP-3009 authorization.
+  - ⚠️ The facilitator is chosen by the **resource server**, not the client (the x402
+    client only signs; it has no facilitator param). So the
+    data endpoint must settle through `https://api.x402.celo.org`. The agent **verifies**
     each settlement on-chain: it decodes the `X-PAYMENT-RESPONSE` tx hash and asserts
     `tx.from == X402_RELAYER` (`0x0d74…FB48`), warning loudly on a mismatch.
 - **C3 — x402 settlements also add Track 1 volume** — free, automatic: it's the same

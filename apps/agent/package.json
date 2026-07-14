@@ -13,7 +13,8 @@
   },
   "dependencies": {
     "@celo/attribution-tags": "^0.3.0",
-    "thirdweb": "^5.105.0",
+    "@x402/core": "2.18.0",
+    "@x402/evm": "2.18.0",
     "viem": "^2.37.0"
   },
   "devDependencies": {
