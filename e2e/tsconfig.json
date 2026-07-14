@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "lib": ["ESNext"],
+    "types": ["bun"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "baseUrl": ".",
+    "typeRoots": ["../apps/agent/node_modules/@types"],
+    "paths": {
+      "@comato/shared/*": ["../packages/shared/src/*"],
+      "@comato/agent/*": ["../apps/agent/src/*"],
+      "viem": ["../apps/agent/node_modules/viem"],
+      "viem/*": ["../apps/agent/node_modules/viem/*"],
+      "@celo/attribution-tags": ["../apps/agent/node_modules/@celo/attribution-tags"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}
