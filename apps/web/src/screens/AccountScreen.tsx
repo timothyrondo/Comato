@@ -1,6 +1,7 @@
 import type { ComponentType, SVGProps } from "react";
 import { useComatoData } from "../data/context";
 import { money } from "../lib/format";
+import { motion, fadeRise, staggerContainer, tapPress } from "../lib/motion";
 import Avatar from "../components/Avatar";
 import {
   ShieldCheck,
@@ -26,17 +27,22 @@ export default function AccountScreen() {
   ];
 
   return (
-    <div className="px-5 pb-4">
-      <header className="pt-3">
+    <motion.div
+      className="px-5 pb-4"
+      variants={staggerContainer()}
+      initial="hidden"
+      animate="visible"
+    >
+      <motion.header variants={fadeRise} className="pt-3">
         <h1 className="text-[26px] font-extrabold leading-tight tracking-tight text-ink">
           Account
         </h1>
-      </header>
+      </motion.header>
 
       {/* Profile card */}
-      <section
-        className="glass-deep rise mt-4 rounded-card p-5 text-on-dark"
-        style={{ animationDelay: "40ms" }}
+      <motion.section
+        variants={fadeRise}
+        className="glass-deep mt-4 rounded-card p-5 text-on-dark"
       >
         <div className="flex items-center gap-4">
           <Avatar name={user.name} size={56} ring={false} />
@@ -51,17 +57,18 @@ export default function AccountScreen() {
             {user.walletShort}
           </span>
         </div>
-      </section>
+      </motion.section>
 
       {/* Settings list */}
-      <section
-        className="glass rise mt-4 overflow-hidden rounded-card"
-        style={{ animationDelay: "100ms" }}
+      <motion.section
+        variants={fadeRise}
+        className="glass mt-4 overflow-hidden rounded-card"
       >
         {ROWS.map(({ Icon, label, value }, i) => (
-          <button
+          <motion.button
             key={label}
             type="button"
+            whileTap={tapPress}
             className={
               "flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors hover:bg-ink/5 " +
               (i > 0 ? "border-t border-line" : "")
@@ -77,13 +84,16 @@ export default function AccountScreen() {
               <span className="text-[13px] text-ink-muted">{value}</span>
             )}
             <ChevronRight size={18} className="text-ink-muted" />
-          </button>
+          </motion.button>
         ))}
-      </section>
+      </motion.section>
 
-      <p className="mt-6 text-center text-[12px] text-ink-muted">
+      <motion.p
+        variants={fadeRise}
+        className="mt-6 text-center text-[12px] text-ink-muted"
+      >
         Comato · anti-liquidation insurance on Celo
-      </p>
-    </div>
+      </motion.p>
+    </motion.div>
   );
 }

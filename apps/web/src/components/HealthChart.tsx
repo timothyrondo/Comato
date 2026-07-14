@@ -1,4 +1,6 @@
+import { useReducedMotion } from "framer-motion";
 import type { ActivityItem } from "../data/fixtures";
+import { motion, EASE_OUT } from "../lib/motion";
 
 /**
  * Health-Factor trace — the desktop hero chart. It reads as a vital-sign
@@ -107,6 +109,22 @@ export default function HealthChart({
   const liqY = y(liquidationHf);
   const rescueY = y(rescueHf);
 
+  const reduce = useReducedMotion();
+  // Marker pop-in fires after the line finishes drawing.
+  const markerIn = (i: number) =>
+    reduce
+      ? {}
+      : {
+          initial: { scale: 0, opacity: 0 },
+          animate: { scale: 1, opacity: 1 },
+          transition: {
+            delay: 1.35 + i * 0.09,
+            type: "spring" as const,
+            stiffness: 500,
+            damping: 26,
+          },
+        };
+
   return (
     <svg
       viewBox={`0 0 ${W} ${H}`}
@@ -175,9 +193,16 @@ export default function HealthChart({
         Liquidation {liquidationHf.toFixed(2)}
       </text>
 
-      {/* Area + line */}
-      <path d={area} fill="url(#hc-area)" />
-      <path
+      {/* Area (fades in under the line) */}
+      <motion.path
+        d={area}
+        fill="url(#hc-area)"
+        initial={reduce ? false : { opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.7, delay: reduce ? 0 : 0.5, ease: EASE_OUT }}
+      />
+      {/* Line — draws in on mount via path length */}
+      <motion.path
         d={line}
         fill="none"
         stroke="url(#hc-line)"
@@ -185,11 +210,14 @@ export default function HealthChart({
         strokeLinecap="round"
         strokeLinejoin="round"
         filter="url(#hc-glow)"
+        initial={reduce ? false : { pathLength: 0 }}
+        animate={reduce ? {} : { pathLength: 1 }}
+        transition={{ duration: 1.5, ease: EASE_OUT }}
       />
 
       {/* Rescue-dip markers */}
-      {dips.map((i) => (
-        <circle
+      {dips.map((i, k) => (
+        <motion.circle
           key={i}
           cx={coords[i].x}
           cy={coords[i].y}
@@ -197,12 +225,20 @@ export default function HealthChart({
           fill="#e0524e"
           stroke="#fdf5ec"
           strokeWidth="2"
+          {...markerIn(k)}
         />
       ))}
 
       {/* Current value dot */}
-      <circle cx={last.x} cy={last.y} r="9" fill="#f1893c" fillOpacity="0.25" />
-      <circle
+      <motion.circle
+        cx={last.x}
+        cy={last.y}
+        r="9"
+        fill="#f1893c"
+        fillOpacity="0.25"
+        {...markerIn(dips.length)}
+      />
+      <motion.circle
         cx={last.x}
         cy={last.y}
         r="4.5"
@@ -210,6 +246,7 @@ export default function HealthChart({
         stroke="#fdf5ec"
         strokeWidth="2"
         filter="url(#hc-glow)"
+        {...markerIn(dips.length)}
       />
     </svg>
   );

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { motion, hoverLift } from "../lib/motion";
 
 type Tone = "light" | "dark" | "accent";
 
@@ -45,9 +46,10 @@ export default function StatTile({
 }: StatTileProps) {
   const t = TONES[tone];
   return (
-    <div
+    <motion.div
+      whileHover={hoverLift}
       className={
-        "flex flex-col justify-between rounded-tile p-4 " +
+        "flex flex-col justify-between rounded-tile p-4 will-change-transform " +
         t.wrap +
         (className ? " " + className : "")
       }
@@ -73,6 +75,6 @@ export default function StatTile({
         </div>
         {sub && <div className={"mt-1.5 text-[12px] " + t.sub}>{sub}</div>}
       </div>
-    </div>
+    </motion.div>
   );
 }

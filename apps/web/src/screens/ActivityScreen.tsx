@@ -2,6 +2,13 @@ import { useState } from "react";
 import { useComatoData } from "../data/context";
 import { type ActivityItem } from "../data/fixtures";
 import { money } from "../lib/format";
+import {
+  motion,
+  fadeRise,
+  staggerContainer,
+  MoneyCount,
+  tapPress,
+} from "../lib/motion";
 import StatTile from "../components/StatTile";
 import ActivityCard from "../components/ActivityCard";
 
@@ -31,21 +38,26 @@ export default function ActivityScreen() {
       : 0;
 
   return (
-    <div className="px-5 pb-4">
+    <motion.div
+      className="px-5 pb-4"
+      variants={staggerContainer()}
+      initial="hidden"
+      animate="visible"
+    >
       {/* Header */}
-      <header className="pt-3">
+      <motion.header variants={fadeRise} className="pt-3">
         <h1 className="text-[26px] font-extrabold leading-tight tracking-tight text-ink">
           Activity
         </h1>
         <p className="mt-1 text-[13px] text-ink-muted">
           Your position's protection &amp; rescue history.
         </p>
-      </header>
+      </motion.header>
 
       {/* Summary */}
-      <section
-        className="rise mt-4 grid grid-cols-2 gap-3"
-        style={{ animationDelay: "40ms" }}
+      <motion.section
+        variants={fadeRise}
+        className="mt-4 grid grid-cols-2 gap-3"
         aria-label="Activity summary"
       >
         <StatTile
@@ -53,7 +65,7 @@ export default function ActivityScreen() {
           tone="dark"
           size="lg"
           label="Total saved"
-          value={money(activitySummary.totalSavedUsd)}
+          value={<MoneyCount value={activitySummary.totalSavedUsd} />}
           sub={`From ${activitySummary.rescueCount} rescues · liquidation penalty avoided`}
           badge={
             <span className="rounded-full bg-accent/18 px-2.5 py-1 text-[11px] font-semibold text-accent-ink">
@@ -63,30 +75,31 @@ export default function ActivityScreen() {
         />
         <StatTile
           label="Premiums paid"
-          value={money(activitySummary.premiumPaidUsd)}
+          value={<MoneyCount value={activitySummary.premiumPaidUsd} />}
           sub="Heartbeat x402"
         />
         <StatTile
           label="Average rescue"
-          value={money(avgRescueUsd)}
+          value={<MoneyCount value={avgRescueUsd} />}
           sub="Per event"
         />
-      </section>
+      </motion.section>
 
       {/* Filter chips */}
-      <div
-        className="rise no-scrollbar mt-5 flex gap-2 overflow-x-auto pb-1"
-        style={{ animationDelay: "100ms" }}
+      <motion.div
+        variants={fadeRise}
+        className="no-scrollbar mt-5 flex gap-2 overflow-x-auto pb-1"
         role="tablist"
         aria-label="Filter activity"
       >
         {FILTERS.map((f) => {
           const active = filter === f.id;
           return (
-            <button
+            <motion.button
               key={f.id}
               type="button"
               role="tab"
+              whileTap={tapPress}
               aria-selected={active}
               onClick={() => setFilter(f.id)}
               className={
@@ -97,12 +110,13 @@ export default function ActivityScreen() {
               }
             >
               {f.label}
-            </button>
+            </motion.button>
           );
         })}
-      </div>
+      </motion.div>
 
-      {/* Grouped list */}
+      {/* Grouped list — cards stagger in per day (keyed by filter so a filter
+          change replays the stagger). */}
       <section className="mt-4 space-y-6" aria-label="Activity list">
         {DAYS.map((day) => {
           const items = visible.filter((a) => a.day === day);
@@ -112,17 +126,17 @@ export default function ActivityScreen() {
               <h2 className="mb-2.5 px-1 text-[12px] font-bold uppercase tracking-[0.08em] text-ink-muted">
                 {day}
               </h2>
-              <div className="space-y-2.5">
-                {items.map((item, i) => (
-                  <div
-                    key={item.id}
-                    className="rise"
-                    style={{ animationDelay: `${140 + i * 45}ms` }}
-                  >
-                    <ActivityCard item={item} />
-                  </div>
+              <motion.div
+                key={filter}
+                className="space-y-2.5"
+                variants={staggerContainer(0.05, 0.02)}
+                initial="hidden"
+                animate="visible"
+              >
+                {items.map((item) => (
+                  <ActivityCard key={item.id} item={item} />
                 ))}
-              </div>
+              </motion.div>
             </div>
           );
         })}
@@ -133,6 +147,6 @@ export default function ActivityScreen() {
           </p>
         )}
       </section>
-    </div>
+    </motion.div>
   );
 }

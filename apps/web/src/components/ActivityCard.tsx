@@ -1,5 +1,6 @@
 import type { ActivityItem } from "../data/fixtures";
 import { money } from "../lib/format";
+import { motion, fadeRise, hoverLift, tapPress } from "../lib/motion";
 import { Bolt, Coins, Refresh, ChevronRight } from "./icons";
 
 /**
@@ -19,7 +20,12 @@ export default function ActivityCard({ item }: { item: ActivityItem }) {
 
   if (isRescue) {
     return (
-      <article className="glass-deep flex items-center gap-3.5 rounded-tile p-4 text-on-dark">
+      <motion.article
+        variants={fadeRise}
+        whileHover={hoverLift}
+        whileTap={tapPress}
+        className="glass-deep flex items-center gap-3.5 rounded-tile p-4 text-on-dark will-change-transform"
+      >
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-accent/20 text-accent-ink shadow-[0_0_24px_-6px_rgba(241,137,60,0.7)]">
           <Icon size={21} />
         </span>
@@ -41,12 +47,17 @@ export default function ActivityCard({ item }: { item: ActivityItem }) {
             </span>
           </div>
         </div>
-      </article>
+      </motion.article>
     );
   }
 
   return (
-    <article className="glass-soft flex items-center gap-3.5 rounded-tile p-4">
+    <motion.article
+      variants={fadeRise}
+      whileHover={hoverLift}
+      whileTap={tapPress}
+      className="glass-soft flex items-center gap-3.5 rounded-tile p-4 will-change-transform"
+    >
       <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-accent-soft text-accent-ink">
         <Icon size={20} />
       </span>
@@ -69,6 +80,6 @@ export default function ActivityCard({ item }: { item: ActivityItem }) {
         </div>
       </div>
       <ChevronRight size={18} className="shrink-0 text-ink-muted" />
-    </article>
+    </motion.article>
   );
 }

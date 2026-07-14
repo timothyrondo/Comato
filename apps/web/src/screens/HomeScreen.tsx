@@ -1,6 +1,13 @@
 import type { Screen } from "../types";
 import { useComatoData } from "../data/context";
-import { money, riskLevel, riskCopy } from "../lib/format";
+import { riskLevel, riskCopy } from "../lib/format";
+import {
+  motion,
+  fadeRise,
+  staggerContainer,
+  HfCount,
+  MoneyCount,
+} from "../lib/motion";
 import Avatar from "../components/Avatar";
 import PulseLine from "../components/PulseLine";
 import StatTile from "../components/StatTile";
@@ -22,9 +29,17 @@ export default function HomeScreen({
   );
 
   return (
-    <div className="px-5 pb-4">
+    <motion.div
+      className="px-5 pb-4"
+      variants={staggerContainer()}
+      initial="hidden"
+      animate="visible"
+    >
       {/* Header */}
-      <header className="flex items-center justify-between pt-3">
+      <motion.header
+        variants={fadeRise}
+        className="flex items-center justify-between pt-3"
+      >
         <div className="min-w-0">
           <h1 className="text-[26px] font-extrabold leading-tight tracking-tight text-ink">
             Hi, {user.name}
@@ -35,12 +50,12 @@ export default function HomeScreen({
           </div>
         </div>
         <Avatar name={user.name} online size={46} />
-      </header>
+      </motion.header>
 
       {/* Hero status card */}
-      <section
-        className="glass-accent rise relative mt-5 overflow-hidden rounded-card p-6"
-        style={{ animationDelay: "40ms" }}
+      <motion.section
+        variants={fadeRise}
+        className="glass-accent relative mt-5 overflow-hidden rounded-card p-6"
         aria-labelledby="hero-status"
       >
         <PulseLine
@@ -80,12 +95,12 @@ export default function HomeScreen({
             <span className="tnum">Uptime {position.uptimePct}%</span>
           </div>
         </div>
-      </section>
+      </motion.section>
 
       {/* Stat tiles */}
-      <section
-        className="rise mt-4 grid grid-cols-2 gap-3"
-        style={{ animationDelay: "100ms" }}
+      <motion.section
+        variants={fadeRise}
+        className="mt-4 grid grid-cols-2 gap-3"
         aria-label="Position summary"
       >
         <StatTile
@@ -93,7 +108,7 @@ export default function HomeScreen({
           tone="dark"
           size="lg"
           label="Health Factor"
-          value={position.healthFactor.toFixed(2)}
+          value={<HfCount value={position.healthFactor} />}
           sub={`${riskCopy[level]} · above liquidation threshold ${position.liquidationHf.toFixed(2)}`}
           badge={
             <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/18 px-2.5 py-1 text-[11px] font-semibold text-accent-ink">
@@ -104,18 +119,18 @@ export default function HomeScreen({
         />
         <StatTile
           label="Premium / hr"
-          value={money(position.premiumPerHourUsd)}
+          value={<MoneyCount value={position.premiumPerHourUsd} />}
           sub="Gasless via x402"
         />
         <StatTile
           label="Value protected"
-          value={money(position.collateralUsd)}
+          value={<MoneyCount value={position.collateralUsd} />}
           sub={`${position.collateralAsset} collateral`}
         />
-      </section>
+      </motion.section>
 
       {/* Primary CTA */}
-      <div className="rise mt-4" style={{ animationDelay: "160ms" }}>
+      <motion.div variants={fadeRise} className="mt-4">
         <PillButton
           onClick={() => onNavigate("position")}
           leading={<ShieldCheck size={19} />}
@@ -123,10 +138,10 @@ export default function HomeScreen({
         >
           Protect Position
         </PillButton>
-      </div>
+      </motion.div>
 
       {/* Recent activity teaser */}
-      <section className="rise mt-7" style={{ animationDelay: "220ms" }}>
+      <motion.section variants={fadeRise} className="mt-7">
         <SectionHeader
           title="Recent activity"
           action={
@@ -146,7 +161,7 @@ export default function HomeScreen({
             No rescues yet — your position is safe.
           </p>
         )}
-      </section>
-    </div>
+      </motion.section>
+    </motion.div>
   );
 }

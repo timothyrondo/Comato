@@ -1,6 +1,12 @@
 import type { Screen } from "../types";
 import { useComatoData } from "../data/context";
-import { money, percent } from "../lib/format";
+import { percent } from "../lib/format";
+import {
+  motion,
+  fadeRise,
+  staggerContainer,
+  MoneyCount,
+} from "../lib/motion";
 import HealthRing from "../components/HealthRing";
 import StatTile from "../components/StatTile";
 import RescueTimeline from "../components/RescueTimeline";
@@ -34,9 +40,17 @@ export default function PositionScreen({
 }) {
   const { position, rescuePlan, refresh } = useComatoData();
   return (
-    <div className="px-5 pb-4">
+    <motion.div
+      className="px-5 pb-4"
+      variants={staggerContainer()}
+      initial="hidden"
+      animate="visible"
+    >
       {/* Header */}
-      <header className="flex items-center justify-between pt-3">
+      <motion.header
+        variants={fadeRise}
+        className="flex items-center justify-between pt-3"
+      >
         <button
           type="button"
           onClick={() => onNavigate("home")}
@@ -61,12 +75,12 @@ export default function PositionScreen({
         >
           <Refresh size={18} />
         </button>
-      </header>
+      </motion.header>
 
       {/* Gauge centerpiece */}
-      <section
-        className="glass rise mt-4 rounded-card px-4 pb-5 pt-6"
-        style={{ animationDelay: "40ms" }}
+      <motion.section
+        variants={fadeRise}
+        className="glass mt-4 rounded-card px-4 pb-5 pt-6"
         aria-label="Health factor gauge"
       >
         <HealthRing
@@ -85,22 +99,22 @@ export default function PositionScreen({
           Comato steps in at {position.rescueHf.toFixed(2)} — before it ever
           reaches you.
         </p>
-      </section>
+      </motion.section>
 
       {/* Position stats */}
-      <section
-        className="rise mt-4 grid grid-cols-2 gap-3"
-        style={{ animationDelay: "100ms" }}
+      <motion.section
+        variants={fadeRise}
+        className="mt-4 grid grid-cols-2 gap-3"
         aria-label="Position details"
       >
         <StatTile
           label="Collateral"
-          value={money(position.collateralUsd)}
+          value={<MoneyCount value={position.collateralUsd} />}
           sub={position.collateralAsset}
         />
         <StatTile
           label="Debt"
-          value={money(position.debtUsd)}
+          value={<MoneyCount value={position.debtUsd} />}
           sub={position.debtAsset}
         />
         <StatTile
@@ -115,10 +129,10 @@ export default function PositionScreen({
           value={position.liquidationHf.toFixed(2)}
           sub={`Rescue at ${position.rescueHf.toFixed(2)}`}
         />
-      </section>
+      </motion.section>
 
       {/* Rescue plan + timeline */}
-      <section className="rise mt-7" style={{ animationDelay: "160ms" }}>
+      <motion.section variants={fadeRise} className="mt-7">
         <SectionHeader title="Rescue plan" />
         <div className="glass rounded-card p-5">
           <div className="glass-accent flex gap-3 rounded-tile p-3.5">
@@ -134,10 +148,10 @@ export default function PositionScreen({
             <RescueTimeline steps={rescuePlan} />
           </div>
         </div>
-      </section>
+      </motion.section>
 
       {/* Agent card (mirrors the reference's bottom summary card) */}
-      <section className="rise mt-4" style={{ animationDelay: "220ms" }}>
+      <motion.section variants={fadeRise} className="mt-4">
         <div className="glass-deep flex items-center gap-3.5 rounded-card p-4 text-on-dark">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent/20 text-accent-ink shadow-[0_0_24px_-6px_rgba(241,137,60,0.7)]">
             <ShieldCheck size={22} />
@@ -168,7 +182,7 @@ export default function PositionScreen({
             </div>
           </div>
         </div>
-      </section>
-    </div>
+      </motion.section>
+    </motion.div>
   );
 }

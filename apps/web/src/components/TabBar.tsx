@@ -1,5 +1,6 @@
 import type { ComponentType, SVGProps } from "react";
 import type { Screen } from "../types";
+import { motion, tapPress } from "../lib/motion";
 import { ShieldCheck, Activity, Clock, User } from "./icons";
 
 type IconType = ComponentType<SVGProps<SVGSVGElement> & { size?: number }>;
@@ -27,23 +28,31 @@ export default function TabBar({
         {TABS.map(({ id, label, Icon }) => {
           const isActive = active === id;
           return (
-            <button
+            <motion.button
               key={id}
               type="button"
               onClick={() => onChange(id)}
+              whileTap={tapPress}
               aria-current={isActive ? "page" : undefined}
               aria-label={label}
               className="group relative flex flex-1 flex-col items-center gap-1 rounded-2xl py-1.5"
             >
-              <span
-                className={
-                  "flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200 " +
-                  (isActive
-                    ? "bg-gradient-to-b from-accent-bright to-accent text-[#fff7ef] shadow-[0_0_20px_-4px_rgba(241,137,60,0.85)]"
-                    : "text-ink-muted group-hover:text-ink")
-                }
-              >
-                <Icon size={21} strokeWidth={isActive ? 2 : 1.75} />
+              <span className="relative flex h-9 w-9 items-center justify-center">
+                {isActive && (
+                  <motion.span
+                    layoutId="tab-active"
+                    transition={{ type: "spring", stiffness: 480, damping: 34 }}
+                    className="absolute inset-0 rounded-full bg-gradient-to-b from-accent-bright to-accent shadow-[0_0_20px_-4px_rgba(241,137,60,0.85)]"
+                  />
+                )}
+                <Icon
+                  size={21}
+                  strokeWidth={isActive ? 2 : 1.75}
+                  className={
+                    "relative z-10 transition-colors duration-200 " +
+                    (isActive ? "text-[#fff7ef]" : "text-ink-muted group-hover:text-ink")
+                  }
+                />
               </span>
               <span
                 className={
@@ -53,7 +62,7 @@ export default function TabBar({
               >
                 {label}
               </span>
-            </button>
+            </motion.button>
           );
         })}
       </div>

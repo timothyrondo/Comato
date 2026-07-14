@@ -3,6 +3,18 @@ import type { Screen } from "../types";
 import { useComatoData } from "../data/context";
 import { type ActivityItem } from "../data/fixtures";
 import { money, percent, riskLevel, riskCopy, type RiskLevel } from "../lib/format";
+import {
+  motion,
+  AnimatePresence,
+  fadeRise,
+  staggerContainer,
+  screenFade,
+  MoneyCount,
+  HfCount,
+  hoverPop,
+  tapPress,
+  EASE_OUT,
+} from "../lib/motion";
 import HealthRing from "../components/HealthRing";
 import HealthChart, { buildHealthSeries } from "../components/HealthChart";
 import StatTile from "../components/StatTile";
@@ -32,19 +44,21 @@ type IconType = ComponentType<SVGProps<SVGSVGElement> & { size?: number }>;
 function Panel({
   children,
   className = "",
-  delay,
+  delay = 0,
 }: {
   children: ReactNode;
   className?: string;
   delay?: number;
 }) {
   return (
-    <section
-      className={"glass rise rounded-panel " + className}
-      style={delay ? { animationDelay: `${delay}ms` } : undefined}
+    <motion.section
+      className={"glass rounded-panel " + className}
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.55, delay: delay / 1000, ease: EASE_OUT }}
     >
       {children}
-    </section>
+    </motion.section>
   );
 }
 
@@ -100,9 +114,14 @@ function Sidebar({
 }) {
   const { user, isLive } = useComatoData();
   return (
-    <aside className="glass sticky top-6 hidden h-[calc(100dvh-3rem)] w-[248px] shrink-0 flex-col rounded-panel p-5 lg:flex">
+    <motion.aside
+      variants={staggerContainer(0.08, 0.06)}
+      initial="hidden"
+      animate="visible"
+      className="glass sticky top-6 hidden h-[calc(100dvh-3rem)] w-[248px] shrink-0 flex-col rounded-panel p-5 lg:flex"
+    >
       {/* Brand */}
-      <div className="flex items-center gap-3 px-1">
+      <motion.div variants={fadeRise} className="flex items-center gap-3 px-1">
         <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-b from-accent-bright to-accent text-[#fff7ef] shadow-[0_0_26px_-6px_rgba(241,137,60,0.9)]">
           <ShieldCheck size={22} />
         </span>
@@ -112,40 +131,62 @@ function Sidebar({
           </div>
           <div className="text-[11px] text-ink-muted">Rescue insurance</div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Nav */}
-      <nav className="mt-8 flex flex-col gap-1.5" aria-label="Dashboard">
+      <motion.nav
+        variants={{
+          hidden: { opacity: 0 },
+          visible: {
+            opacity: 1,
+            transition: { staggerChildren: 0.06, delayChildren: 0.12 },
+          },
+        }}
+        className="mt-8 flex flex-col gap-1.5"
+        aria-label="Dashboard"
+      >
         {NAV.map(({ id, label, Icon }) => {
           const active = screen === id;
           return (
-            <button
+            <motion.button
               key={id}
+              variants={fadeRise}
+              whileHover={{ x: 3 }}
+              whileTap={tapPress}
               type="button"
               onClick={() => onNavigate(id)}
               aria-current={active ? "page" : undefined}
               className={
-                "group relative flex items-center gap-3 rounded-2xl px-3.5 py-3 text-[14.5px] font-semibold transition-all " +
+                "group relative flex items-center gap-3 rounded-2xl px-3.5 py-3 text-[14.5px] font-semibold transition-colors " +
                 (active
-                  ? "glass-accent text-ink"
+                  ? "text-ink"
                   : "text-ink-muted hover:bg-ink/5 hover:text-ink")
               }
             >
-              <Icon
-                size={20}
-                className={active ? "text-accent-ink" : ""}
-                strokeWidth={active ? 2 : 1.75}
-              />
-              {label}
               {active && (
-                <span className="absolute right-3 h-1.5 w-1.5 rounded-full bg-accent-bright shadow-[0_0_10px_2px_rgba(255,168,90,0.8)]" />
+                <motion.span
+                  layoutId="sidebar-active"
+                  transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                  className="glass-accent absolute inset-0 rounded-2xl"
+                />
               )}
-            </button>
+              <span className="relative z-10 flex items-center gap-3">
+                <Icon
+                  size={20}
+                  className={active ? "text-accent-ink" : ""}
+                  strokeWidth={active ? 2 : 1.75}
+                />
+                {label}
+              </span>
+              {active && (
+                <span className="absolute right-3 z-10 h-1.5 w-1.5 rounded-full bg-accent-bright shadow-[0_0_10px_2px_rgba(255,168,90,0.8)]" />
+              )}
+            </motion.button>
           );
         })}
-      </nav>
+      </motion.nav>
 
-      <div className="mt-auto space-y-3">
+      <motion.div variants={fadeRise} className="mt-auto space-y-3">
         <div className="glass-accent flex items-center gap-2.5 rounded-2xl px-3.5 py-3">
           <PulseLine className="h-6 w-10 shrink-0 text-accent-bright/70" strokeWidth={2} />
           <div className="min-w-0">
@@ -166,8 +207,8 @@ function Sidebar({
             title={isLive ? "Live" : "Demo"}
           />
         </div>
-      </div>
-    </aside>
+      </motion.div>
+    </motion.aside>
   );
 }
 
@@ -199,31 +240,42 @@ function TopBar({
       </div>
       <div className="flex items-center gap-2.5">
         <LiveBadge isLive={isLive} />
-        <button
+        <motion.button
           type="button"
           onClick={refresh}
+          whileHover={{ scale: 1.06 }}
+          whileTap={{ scale: 0.9, rotate: -180 }}
           aria-label="Refresh data"
-          className="glass-soft flex h-11 w-11 items-center justify-center rounded-full text-ink-soft transition-colors hover:text-ink active:scale-95"
+          className="glass-soft flex h-11 w-11 items-center justify-center rounded-full text-ink-soft transition-colors hover:text-ink"
         >
           <Refresh size={19} />
-        </button>
-        <button
+        </motion.button>
+        <motion.button
           type="button"
+          whileHover={{ scale: 1.06 }}
+          whileTap={tapPress}
           aria-label="Notifications"
-          className="glass-soft flex h-11 w-11 items-center justify-center rounded-full text-ink-soft transition-colors hover:text-ink active:scale-95"
+          className="glass-soft flex h-11 w-11 items-center justify-center rounded-full text-ink-soft transition-colors hover:text-ink"
         >
           <Bell size={19} />
-        </button>
-        {screen === "home" && (
-          <button
-            type="button"
-            onClick={() => onNavigate("position")}
-            className="btn-primary inline-flex items-center gap-2 rounded-full px-5 py-3 text-[14px] font-semibold transition-all active:scale-[0.98]"
-          >
-            <ShieldCheck size={18} />
-            Protect position
-          </button>
-        )}
+        </motion.button>
+        <AnimatePresence>
+          {screen === "home" && (
+            <motion.button
+              type="button"
+              onClick={() => onNavigate("position")}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              whileHover={hoverPop}
+              whileTap={tapPress}
+              className="btn-primary inline-flex items-center gap-2 rounded-full px-5 py-3 text-[14px] font-semibold transition-colors"
+            >
+              <ShieldCheck size={18} />
+              Protect position
+            </motion.button>
+          )}
+        </AnimatePresence>
       </div>
     </header>
   );
@@ -247,20 +299,24 @@ function RingStats({ compact = false }: { compact?: boolean }) {
         <div className="grid w-full grid-cols-2 gap-3">
           <StatTile
             label="Collateral"
-            value={money(position.collateralUsd)}
+            value={<MoneyCount value={position.collateralUsd} />}
             sub={position.collateralAsset}
           />
-          <StatTile label="Debt" value={money(position.debtUsd)} sub={position.debtAsset} />
+          <StatTile
+            label="Debt"
+            value={<MoneyCount value={position.debtUsd} />}
+            sub={position.debtAsset}
+          />
           <StatTile
             tone="accent"
             label="Value protected"
-            value={money(position.collateralUsd)}
+            value={<MoneyCount value={position.collateralUsd} />}
             sub="Shielded from liquidation"
           />
           <StatTile
             tone="dark"
             label="Premium / hr"
-            value={money(position.premiumPerHourUsd)}
+            value={<MoneyCount value={position.premiumPerHourUsd} />}
             sub="Gasless via x402"
           />
           {!compact && (
@@ -288,9 +344,11 @@ function RingStats({ compact = false }: { compact?: boolean }) {
 function HeroBanner() {
   const { position } = useComatoData();
   return (
-    <section
-      className="glass-accent rise relative overflow-hidden rounded-panel p-7"
-      style={{ animationDelay: "20ms" }}
+    <motion.section
+      className="glass-accent relative overflow-hidden rounded-panel p-7"
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.55, delay: 0.02, ease: EASE_OUT }}
     >
       <PulseLine
         className="pointer-events-none absolute inset-x-0 bottom-5 h-16 w-full text-accent-bright/30"
@@ -340,7 +398,7 @@ function HeroBanner() {
           </div>
         </div>
       </div>
-    </section>
+    </motion.section>
   );
 }
 
@@ -380,17 +438,17 @@ function PositionRow({ onNavigate }: { onNavigate: (s: Screen) => void }) {
             </div>
           </div>
           <div className="tnum text-right text-[14px] font-semibold text-ink">
-            {money(position.collateralUsd)}
+            <MoneyCount value={position.collateralUsd} />
           </div>
           <div className="tnum text-right text-[14px] font-semibold text-ink">
-            {money(position.debtUsd)}
+            <MoneyCount value={position.debtUsd} />
           </div>
           <div className="tnum text-right text-[14px] font-semibold text-ink-soft">
             {percent(position.currentLtv)}
           </div>
           <div className="flex items-center justify-end gap-2">
             <span className="tnum text-[14px] font-bold text-ink">
-              {position.healthFactor.toFixed(2)}
+              <HfCount value={position.healthFactor} />
             </span>
             <StatusPill level={level} />
           </div>
@@ -418,7 +476,7 @@ function ChartCard() {
           </p>
         </div>
         <span className="tnum font-display text-[28px] font-extrabold leading-none text-ink">
-          {position.healthFactor.toFixed(2)}
+          <HfCount value={position.healthFactor} />
         </span>
       </div>
       <HealthChart
@@ -445,7 +503,12 @@ function ActivityRail({ onNavigate }: { onNavigate: (s: Screen) => void }) {
           See all
         </button>
       </div>
-      <div className="space-y-2.5">
+      <motion.div
+        className="space-y-2.5"
+        variants={staggerContainer(0.06, 0.1)}
+        initial="hidden"
+        animate="visible"
+      >
         {activity.slice(0, 4).map((item) => (
           <ActivityCard key={item.id} item={item} />
         ))}
@@ -454,7 +517,7 @@ function ActivityRail({ onNavigate }: { onNavigate: (s: Screen) => void }) {
             No rescues yet — your position is safe.
           </p>
         )}
-      </div>
+      </motion.div>
     </Panel>
   );
 }
@@ -479,7 +542,7 @@ function PremiumRail() {
           Total saved
         </div>
         <div className="tnum mt-1 font-display text-[2rem] font-extrabold leading-none text-accent-ink">
-          {money(activitySummary.totalSavedUsd)}
+          <MoneyCount value={activitySummary.totalSavedUsd} />
         </div>
         <div className="mt-1.5 text-[12px] text-on-dark-muted">
           Liquidation penalties avoided
@@ -540,11 +603,14 @@ function AlertRail() {
         the {position.rescueHf.toFixed(2)} rescue line. Comato arms automatically
         before it's reached.
       </p>
-      {/* Buffer meter */}
+      {/* Buffer meter — fill grows in on mount (scaleX = GPU-friendly) */}
       <div className="relative mt-5 h-2.5 rounded-full bg-ink/10">
-        <div
-          className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-accent to-accent-bright shadow-[0_0_16px_-2px_rgba(241,137,60,0.8)]"
+        <motion.div
+          className="absolute inset-y-0 left-0 origin-left rounded-full bg-gradient-to-r from-accent to-accent-bright shadow-[0_0_16px_-2px_rgba(241,137,60,0.8)]"
           style={{ width: `${cur}%` }}
+          initial={{ scaleX: 0 }}
+          animate={{ scaleX: 1 }}
+          transition={{ duration: 0.9, delay: 0.25, ease: EASE_OUT }}
         />
         <span
           className="absolute -top-1 w-0.5 -translate-x-1/2 rounded bg-warn"
@@ -616,7 +682,7 @@ function PositionsView() {
               tone="dark"
               size="lg"
               label="Health Factor"
-              value={position.healthFactor.toFixed(2)}
+              value={<HfCount value={position.healthFactor} />}
               sub={`Above liquidation ${position.liquidationHf.toFixed(2)}`}
             />
             <div className="grid grid-cols-2 gap-3">
@@ -699,25 +765,31 @@ function ActivityView() {
           tone="dark"
           size="lg"
           label="Total saved"
-          value={money(activitySummary.totalSavedUsd)}
+          value={<MoneyCount value={activitySummary.totalSavedUsd} />}
           sub={`From ${activitySummary.rescueCount} rescues`}
         />
         <StatTile
           label="Premiums paid"
-          value={money(activitySummary.premiumPaidUsd)}
+          value={<MoneyCount value={activitySummary.premiumPaidUsd} />}
           sub="Heartbeat x402"
         />
-        <StatTile tone="accent" label="Average rescue" value={money(avgRescueUsd)} sub="Per event" />
+        <StatTile
+          tone="accent"
+          label="Average rescue"
+          value={<MoneyCount value={avgRescueUsd} />}
+          sub="Per event"
+        />
       </div>
 
       <div className="flex gap-2" role="tablist" aria-label="Filter activity">
         {FILTERS.map((f) => {
           const active = filter === f.id;
           return (
-            <button
+            <motion.button
               key={f.id}
               type="button"
               role="tab"
+              whileTap={tapPress}
               aria-selected={active}
               onClick={() => setFilter(f.id)}
               className={
@@ -728,7 +800,7 @@ function ActivityView() {
               }
             >
               {f.label}
-            </button>
+            </motion.button>
           );
         })}
       </div>
@@ -742,11 +814,17 @@ function ActivityView() {
               <h2 className="mb-2.5 px-1 text-[12px] font-bold uppercase tracking-[0.08em] text-ink-muted">
                 {day}
               </h2>
-              <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
+              <motion.div
+                key={filter}
+                className="grid grid-cols-1 gap-2.5 lg:grid-cols-2"
+                variants={staggerContainer(0.05, 0.02)}
+                initial="hidden"
+                animate="visible"
+              >
                 {items.map((item) => (
                   <ActivityCard key={item.id} item={item} />
                 ))}
-              </div>
+              </motion.div>
             </div>
           );
         })}
@@ -796,9 +874,10 @@ function SettingsView() {
 
       <Panel className="overflow-hidden" delay={100}>
         {ROWS.map(({ Icon, label, value }, i) => (
-          <button
+          <motion.button
             key={label}
             type="button"
+            whileTap={tapPress}
             className={
               "flex w-full items-center gap-3.5 px-6 py-4 text-left transition-colors hover:bg-ink/5 " +
               (i > 0 ? "border-t border-line" : "")
@@ -810,7 +889,7 @@ function SettingsView() {
             <span className="flex-1 text-[15px] font-semibold text-ink">{label}</span>
             {value && <span className="text-[13px] text-ink-muted">{value}</span>}
             <ChevronRight size={18} className="text-ink-muted" />
-          </button>
+          </motion.button>
         ))}
       </Panel>
     </div>
@@ -830,12 +909,24 @@ export default function DesktopApp({
     <div className="relative min-h-dvh w-full">
       <div className="mx-auto flex w-full max-w-[1640px] gap-6 p-6">
         <Sidebar screen={screen} onNavigate={onNavigate} />
-        <main key={screen} className="min-w-0 flex-1 space-y-6 pb-6">
+        {/* TopBar persists (anchors the view); only the view below cross-fades.
+            Each view's panels replay their staggered entrance on switch. */}
+        <main className="min-w-0 flex-1 space-y-6 pb-6">
           <TopBar screen={screen} onNavigate={onNavigate} />
-          {screen === "home" && <OverviewView onNavigate={onNavigate} />}
-          {screen === "position" && <PositionsView />}
-          {screen === "activity" && <ActivityView />}
-          {screen === "account" && <SettingsView />}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={screen}
+              variants={screenFade}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+            >
+              {screen === "home" && <OverviewView onNavigate={onNavigate} />}
+              {screen === "position" && <PositionsView />}
+              {screen === "activity" && <ActivityView />}
+              {screen === "account" && <SettingsView />}
+            </motion.div>
+          </AnimatePresence>
         </main>
       </div>
     </div>

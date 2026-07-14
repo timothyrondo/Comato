@@ -22,6 +22,9 @@
  * the background.
  */
 
+import { useReducedMotion } from "framer-motion";
+import { motion } from "../lib/motion";
+
 // Auto-discover an optional bundled background (empty object if none exists —
 // the file need not be present, so the build stays green either way).
 const bundledBg = Object.values(
@@ -36,6 +39,27 @@ const bgImage =
   (import.meta.env.VITE_BG_IMAGE as string | undefined) || bundledBg;
 
 export default function AmbientBackground() {
+  const reduce = useReducedMotion();
+  // Slow, organic multi-axis drift on each glow (transform-only → GPU-friendly).
+  // Disabled entirely under reduced-motion; the glows just sit still.
+  const drift = (
+    x: number[],
+    y: number[],
+    scale: number[],
+    duration: number,
+  ) =>
+    reduce
+      ? undefined
+      : {
+          animate: { x, y, scale },
+          transition: {
+            duration,
+            repeat: Infinity,
+            repeatType: "mirror" as const,
+            ease: "easeInOut" as const,
+          },
+        };
+
   return (
     <div
       aria-hidden
@@ -70,43 +94,44 @@ export default function AmbientBackground() {
       )}
 
       {/* Primary orange glow, top-left */}
-      <div
-        className="drift absolute -left-[12%] -top-[16%] h-[64vh] w-[64vh] rounded-full"
+      <motion.div
+        className="absolute -left-[12%] -top-[16%] h-[64vh] w-[64vh] rounded-full"
         style={{
           background:
             "radial-gradient(circle, rgba(241,137,60,0.42) 0%, rgba(241,137,60,0.12) 44%, transparent 70%)",
           filter: "blur(34px)",
         }}
+        {...drift([0, 26, -14], [0, -30, 16], [1, 1.07, 1.02], 26)}
       />
       {/* Coral / pink counter-glow, bottom-right */}
-      <div
-        className="drift absolute -bottom-[22%] -right-[10%] h-[70vh] w-[70vh] rounded-full"
+      <motion.div
+        className="absolute -bottom-[22%] -right-[10%] h-[70vh] w-[70vh] rounded-full"
         style={{
           background:
             "radial-gradient(circle, rgba(226,105,133,0.28) 0%, rgba(226,105,133,0.08) 46%, transparent 72%)",
           filter: "blur(38px)",
-          animationDelay: "-6s",
         }}
+        {...drift([0, -22, 12], [0, 24, -12], [1, 1.05, 1.01], 32)}
       />
       {/* Warm peach highlight to add brightness on the right */}
-      <div
-        className="drift absolute right-[16%] top-[26%] h-[44vh] w-[44vh] rounded-full"
+      <motion.div
+        className="absolute right-[16%] top-[26%] h-[44vh] w-[44vh] rounded-full"
         style={{
           background:
             "radial-gradient(circle, rgba(224,149,89,0.3) 0%, transparent 68%)",
           filter: "blur(30px)",
-          animationDelay: "-11s",
         }}
+        {...drift([0, 18, -10], [0, 20, -8], [1, 1.08, 1.03], 22)}
       />
       {/* Soft cream bloom, lower-left, keeps the base from going flat */}
-      <div
-        className="drift absolute -bottom-[10%] left-[8%] h-[46vh] w-[46vh] rounded-full"
+      <motion.div
+        className="absolute -bottom-[10%] left-[8%] h-[46vh] w-[46vh] rounded-full"
         style={{
           background:
             "radial-gradient(circle, rgba(255,246,235,0.6) 0%, transparent 66%)",
           filter: "blur(30px)",
-          animationDelay: "-3s",
         }}
+        {...drift([0, 20, -12], [0, -14, 10], [1, 1.06, 1.0], 29)}
       />
       {/* Fine grain to break up the gradients (self-contained SVG noise) */}
       <div

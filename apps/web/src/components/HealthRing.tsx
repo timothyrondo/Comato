@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useReducedMotion } from "framer-motion";
 import { riskLevel, riskCopy, type RiskLevel } from "../lib/format";
+import { motion, useCountUp, EASE_OUT } from "../lib/motion";
 
 /**
  * Health-factor gauge — the app's signature element. A 270° dial split into
  * discrete risk zones (danger / warn / safe), a liquidation-threshold tick, and
- * a knob at the current value. The centre number counts up on mount, a small
+ * a knob at the current value. On mount the gauge *sweeps*: the centre number
+ * counts up from 0 and the knob glides along the arc to the live value — a small
  * "revival" nod to what Comato does. Colours come straight from the risk tokens.
  */
 
@@ -65,39 +67,26 @@ export default function HealthRing({
   };
 
   const level = riskLevel(value, rescueHf, liquidationHf);
-  const knob = polar(cx, cy, r, angleAt(value));
+  const reduce = useReducedMotion();
+  // Draw-in for the coloured risk arcs (clockwise, danger → safe).
+  const drawArc = (order: number) =>
+    reduce
+      ? {}
+      : {
+          initial: { pathLength: 0 },
+          animate: { pathLength: 1 },
+          transition: { duration: 0.9, delay: 0.1 + order * 0.12, ease: EASE_OUT },
+        };
+
+  // Gauge sweep + count-up: the number counts 0 → value while the knob glides
+  // along the arc to match (shared motion hook; snaps under reduced motion).
+  const display = useCountUp(value, { duration: 1.15 });
+  const knob = polar(cx, cy, r, angleAt(display));
 
   // Liquidation tick
   const liqInner = polar(cx, cy, r - stroke / 2 - 3, angleAt(liquidationHf));
   const liqOuter = polar(cx, cy, r + stroke / 2 + 3, angleAt(liquidationHf));
   const liqLabel = polar(cx, cy, r + 20, angleAt(liquidationHf));
-
-  // Count-up animation (from liquidation → current)
-  const [display, setDisplay] = useState(value);
-  const [knobIn, setKnobIn] = useState(false);
-  useEffect(() => {
-    const prefersReduced = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    if (prefersReduced) {
-      setDisplay(value);
-      setKnobIn(true);
-      return;
-    }
-    const from = liquidationHf;
-    const dur = 1100;
-    const t0 = performance.now();
-    let raf = 0;
-    const tick = (now: number) => {
-      const p = clamp01((now - t0) / dur);
-      const eased = 1 - Math.pow(1 - p, 3);
-      setDisplay(from + (value - from) * eased);
-      if (p < 1) raf = requestAnimationFrame(tick);
-      else setKnobIn(true);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [value, liquidationHf]);
 
   return (
     <div className="relative mx-auto" style={{ width: size, maxWidth: "100%" }}>
@@ -124,31 +113,34 @@ export default function HealthRing({
           strokeWidth={stroke}
           strokeLinecap="round"
         />
-        {/* Risk zones (glowing) */}
+        {/* Risk zones (glowing) — draw in clockwise on mount */}
         <g filter="url(#hr-glow)">
-          <path
+          <motion.path
             d={arc(min, rescueHf, 0, gap / 2)}
             fill="none"
             stroke={RISK_HEX.danger}
             strokeWidth={stroke}
             strokeLinecap="round"
             opacity={0.95}
+            {...drawArc(0)}
           />
-          <path
+          <motion.path
             d={arc(rescueHf, warnHf, gap / 2, gap / 2)}
             fill="none"
             stroke={RISK_HEX.warn}
             strokeWidth={stroke}
             strokeLinecap="round"
             opacity={0.95}
+            {...drawArc(1)}
           />
-          <path
+          <motion.path
             d={arc(warnHf, max, gap / 2, 0)}
             fill="none"
             stroke={RISK_HEX.safe}
             strokeWidth={stroke}
             strokeLinecap="round"
             opacity={0.95}
+            {...drawArc(2)}
           />
         </g>
 
@@ -175,12 +167,11 @@ export default function HealthRing({
           1.00
         </text>
 
-        {/* Knob at current value */}
-        <g
-          style={{
-            opacity: knobIn ? 1 : 0,
-            transition: "opacity 260ms ease 120ms",
-          }}
+        {/* Knob at current value — fades in as the sweep settles */}
+        <motion.g
+          initial={reduce ? false : { opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3, delay: reduce ? 0 : 0.35 }}
         >
           <circle cx={knob.x} cy={knob.y} r={13} fill="#fdf5ec" />
           <circle
@@ -193,7 +184,7 @@ export default function HealthRing({
             filter="url(#hr-glow)"
           />
           <circle cx={knob.x} cy={knob.y} r={4.5} fill={RISK_HEX[level]} />
-        </g>
+        </motion.g>
       </svg>
 
       {/* Centre readout */}
