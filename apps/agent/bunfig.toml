@@ -1,0 +1,14 @@
+# Bun test configuration (verified against bun 1.3.9).
+# Coverage is collected on every `bun test`; the run FAILS (non-zero exit) if
+# line OR function coverage drops below 80%. Setting any threshold implicitly
+# enables fail-on-low-coverage.
+[test]
+coverage = true
+# Report against source only — test files are excluded from the denominator so
+# the gate reflects real source coverage, not test-file self-coverage.
+coverageSkipTestFiles = true
+# index.ts is the process entrypoint (wires modules, starts loops, `void main()`
+# on import) — it has no unit surface; exclude it rather than sham-cover it.
+coveragePathIgnorePatterns = ["src/index.ts"]
+# Enforce >= 80% for BOTH lines and functions.
+coverageThreshold = { lines = 0.80, functions = 0.80 }
