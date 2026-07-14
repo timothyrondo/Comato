@@ -26,9 +26,7 @@ import {
   formatUnits,
   parseAbiItem,
   parseEventLogs,
-  parseUnits,
   type Address,
-  type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
@@ -92,21 +90,24 @@ function loadScenarioConfig(opts: {
   Object.assign(process.env, {
     ATTRIBUTION_CODE,
     CELO_RPC: RPC_URL,
-    CHAIN_ID: "42220",
     COMATO_PRIVATE_KEY: COMATO.key,
     DRY_RUN: "false",
     LOG_LEVEL: process.env.E2E_LOG_LEVEL ?? "warn",
-    MONITOR_INTERVAL_MS: "30000",
     SUBSCRIBERS: JSON.stringify([sub]),
     RESCUE_ENABLED: "true",
-    RESCUE_DISTRESS_HF: formatUnits(opts.distressHf, 18),
-    RESCUE_MAX_AMOUNT: formatUnits(opts.maxAmount, 6),
-    RESCUE_ASSET_DECIMALS: "6",
-    RESCUE_REQUIRE_PREMIUM: "true",
-    RESCUE_VIA_EXECUTOR: String(opts.viaExecutor),
     ...(opts.executorAddress ? { EXECUTOR_ADDRESS: opts.executorAddress } : {}),
   });
-  return loadConfig();
+
+  // Tuning params (distress ceiling, repay cap, EOA-direct vs Executor path) moved from
+  // env to `apps/agent/src/defaults.ts`. This scenario still needs to vary them per-run —
+  // the distress ceiling tracks the live fork HF, the repay cap tracks the position's debt,
+  // and scenario B exercises the Executor path — so override them on the parsed Config
+  // directly instead of through env (which loadConfig no longer reads for these).
+  const cfg = loadConfig();
+  cfg.rescue.distressHf = opts.distressHf;
+  cfg.rescue.maxAmount = opts.maxAmount;
+  cfg.rescue.viaExecutor = opts.viaExecutor;
+  return cfg;
 }
 
 async function main() {
