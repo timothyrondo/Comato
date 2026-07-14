@@ -1,0 +1,4 @@
+# Persisted rate-limiter state (O3). Holds subscriber addresses + rescue timestamps —
+# runtime state, not source. Default path is .comato/ (RESCUE_STATE_FILE overrides).
+.comato/
+*.rate-limiter-state.json
