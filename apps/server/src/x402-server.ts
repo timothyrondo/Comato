@@ -19,11 +19,36 @@ import {
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { createPublicClient, http, type PublicClient } from "viem";
 import { celo } from "viem/chains";
-import { CELO_NETWORK, X402_RELAYER } from "./constants.ts";
+import { CELO_NETWORK, X402_API_KEY_HEADER, X402_RELAYER } from "./constants.ts";
 import { logger } from "./logger.ts";
 import type { ServerConfig } from "./config.ts";
 
 export type RelayerVerdict = "ok" | "mismatch" | "unverified" | "skipped";
+
+/** Per-path header maps the SDK's `HTTPFacilitatorClient` requests before each call. */
+export interface FacilitatorAuthHeaders {
+  verify: Record<string, string>;
+  settle: Record<string, string>;
+  supported: Record<string, string>;
+}
+
+/**
+ * Builds the `createAuthHeaders` callback for Celo's `HTTPFacilitatorClient`.
+ *
+ * The SDK calls this before every request and merges the returned per-path map into
+ * that path's fetch headers (verified in `@x402/core` `HTTPFacilitatorClient`:
+ * `settle()` merges `authHeaders.settle`, `verify()` merges `authHeaders.verify`, etc).
+ * Celo requires `X-API-Key` ONLY on `/settle` (1 credit per settlement); `/verify` and
+ * `/supported` are public, so the key is scoped to `settle` and the public paths stay
+ * keyless (no needless key exposure).
+ */
+export function celoFacilitatorAuthHeaders(apiKey: string): () => Promise<FacilitatorAuthHeaders> {
+  return async () => ({
+    verify: {},
+    settle: { [X402_API_KEY_HEADER]: apiKey },
+    supported: {},
+  });
+}
 
 /** Pure classification of a settlement's on-chain sender against the Celo relayer. */
 export function classifyRelayer(sender: string | null, assertRelayer: boolean): RelayerVerdict {
@@ -164,8 +189,20 @@ export function buildResourceServer(cfg: ServerConfig, deps: BuildServerDeps = {
     });
   }
 
+  if (!deps.facilitator && !cfg.apiKey) {
+    logger.warn("x402.apikey.missing", {
+      note: "X402_API_KEY unset — /settle will 401 (facilitator requires X-API-Key)",
+    });
+  }
+
   const facilitator: FacilitatorClient =
-    deps.facilitator ?? new HTTPFacilitatorClient({ url: cfg.facilitatorUrl });
+    deps.facilitator ??
+    new HTTPFacilitatorClient({
+      url: cfg.facilitatorUrl,
+      // Attach X-API-Key to /settle (required; 1 credit each). Skip if unset so a
+      // missing key surfaces as the facilitator's 401 rather than sending `undefined`.
+      createAuthHeaders: cfg.apiKey ? celoFacilitatorAuthHeaders(cfg.apiKey) : undefined,
+    });
 
   return new x402ResourceServer(facilitator)
     .register(CELO_NETWORK, new ExactEvmScheme())

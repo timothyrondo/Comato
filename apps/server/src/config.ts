@@ -44,6 +44,11 @@ function toAtomicUsdc(value: string, label: string): string {
 export interface ServerConfig {
   payTo: `0x${string}`;
   facilitatorUrl: string;
+  /**
+   * Celo facilitator API key (`x402_live_…` / `x402_test_…`). Sent as `X-API-Key`
+   * on `/settle` — the facilitator requires it and burns 1 credit per settlement.
+   */
+  apiKey: string;
   rpcUrl: string;
   network: CeloNetwork;
   /** Human-readable premium, e.g. "0.001". */
@@ -61,6 +66,11 @@ export function loadServerConfig(env: Env = process.env): ServerConfig {
   const schema = z.object({
     COMATO_WALLET: addressSchema,
     X402_FACILITATOR_URL: z.string().url().default(X402_FACILITATOR_URL),
+    // Required: the Celo facilitator rejects /settle without X-API-Key (401). Create it
+    // on the x402.celo.org dashboard (sign with a wallet, no gas). 1 credit per settle.
+    X402_API_KEY: z
+      .string()
+      .min(1, "X402_API_KEY is required — create it on the x402.celo.org dashboard; /settle 401s without it"),
     CELO_RPC: z.string().url().default(DEFAULT_CELO_RPC),
     PREMIUM_USDC: z.string().default("0.001"),
     PORT: z.coerce.number().int().positive().max(65535).default(4021),
@@ -72,6 +82,7 @@ export function loadServerConfig(env: Env = process.env): ServerConfig {
   return {
     payTo: parsed.COMATO_WALLET as `0x${string}`,
     facilitatorUrl: parsed.X402_FACILITATOR_URL,
+    apiKey: parsed.X402_API_KEY,
     rpcUrl: parsed.CELO_RPC,
     network: CELO_NETWORK,
     premiumUsdc: parsed.PREMIUM_USDC,

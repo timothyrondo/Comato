@@ -7,19 +7,20 @@
  * covered by running the real client against the real Celo facilitator (see CLAUDE.md).
  */
 
-import { describe, expect, it } from "bun:test";
-import type { FacilitatorClient } from "@x402/core/server";
+import { afterEach, describe, expect, it } from "bun:test";
+import { HTTPFacilitatorClient, type FacilitatorClient } from "@x402/core/server";
 import { createApp } from "../src/app.ts";
-import { classifyRelayer, readSenderWithRetry } from "../src/x402-server.ts";
+import { celoFacilitatorAuthHeaders, classifyRelayer, readSenderWithRetry } from "../src/x402-server.ts";
 import type { AfterSettleObservation } from "../src/x402-server.ts";
 import type { ServerConfig } from "../src/config.ts";
-import { CELO_NETWORK, USDC, X402_RELAYER } from "../src/constants.ts";
+import { CELO_NETWORK, USDC, X402_API_KEY_HEADER, X402_RELAYER } from "../src/constants.ts";
 
 const PAYER = "0x2222222222222222222222222222222222222222";
 
 const baseConfig: ServerConfig = {
   payTo: "0x1111111111111111111111111111111111111111",
   facilitatorUrl: "https://x402.celo.org",
+  apiKey: "x402_test_baseconfig_key",
   rpcUrl: "https://forno.celo.org",
   network: CELO_NETWORK,
   premiumUsdc: "0.001",
@@ -199,5 +200,82 @@ describe("readSenderWithRetry (O6 — brief retry, never throws)", () => {
       { retries: 2, delayMs: 0 },
     );
     expect(sender).toBeNull();
+  });
+});
+
+describe("celoFacilitatorAuthHeaders (X-API-Key scoped to /settle)", () => {
+  it("puts X-API-Key on settle only; verify + supported stay keyless", async () => {
+    const headers = await celoFacilitatorAuthHeaders("x402_live_secret")();
+    expect(headers.settle).toEqual({ [X402_API_KEY_HEADER]: "x402_live_secret" });
+    expect(headers.verify).toEqual({});
+    expect(headers.supported).toEqual({});
+  });
+});
+
+/**
+ * End-to-end header wiring: build a REAL `HTTPFacilitatorClient` with our
+ * `createAuthHeaders` factory, stub `fetch`, and assert the outbound request carries
+ * (or doesn't carry) `X-API-Key`. This exercises the exact SDK path the live server
+ * uses — the mock facilitator in the other tests bypasses HTTP, so it can't prove the
+ * header is attached.
+ */
+describe("HTTPFacilitatorClient attaches X-API-Key on /settle", () => {
+  const API_KEY = "x402_live_test_key_123";
+  const realFetch = globalThis.fetch;
+  const calls: { url: string; headers: Record<string, string> }[] = [];
+
+  function stubFetch(): void {
+    // Params typed off `typeof fetch` (no DOM-lib name needed); cast the assignment
+    // through unknown since Bun's fetch type also carries a `preconnect` member.
+    const stub = async (...args: Parameters<typeof fetch>): Promise<Response> => {
+      const [input, init] = args;
+      const url = String(input);
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      calls.push({ url, headers });
+      const body = url.endsWith("/settle")
+        ? { success: true, transaction: "0x" + "ab".repeat(32), network: CELO_NETWORK }
+        : { isValid: true, payer: PAYER };
+      return new Response(JSON.stringify(body), { status: 200 });
+    };
+    globalThis.fetch = stub as unknown as typeof fetch;
+  }
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+    calls.length = 0;
+  });
+
+  it("sends X-API-Key to /settle but not to /verify", async () => {
+    stubFetch();
+    const client = new HTTPFacilitatorClient({
+      url: "https://api.x402.celo.org",
+      createAuthHeaders: celoFacilitatorAuthHeaders(API_KEY),
+    });
+
+    // Minimal payload/requirements — settle() only serializes them; no validation here.
+    const payload = { x402Version: 2 } as never;
+    const requirements = {} as never;
+
+    await client.settle(payload, requirements);
+    await client.verify(payload, requirements);
+
+    const settleCall = calls.find((c) => c.url.endsWith("/settle"));
+    const verifyCall = calls.find((c) => c.url.endsWith("/verify"));
+
+    expect(settleCall).toBeDefined();
+    expect(settleCall!.headers[X402_API_KEY_HEADER]).toBe(API_KEY);
+
+    // /verify is public — the key must NOT leak onto it.
+    expect(verifyCall).toBeDefined();
+    expect(verifyCall!.headers[X402_API_KEY_HEADER]).toBeUndefined();
+  });
+
+  it("omits X-API-Key entirely when no createAuthHeaders is configured", async () => {
+    stubFetch();
+    const client = new HTTPFacilitatorClient({ url: "https://api.x402.celo.org" });
+    await client.settle({ x402Version: 2 } as never, {} as never);
+
+    const settleCall = calls.find((c) => c.url.endsWith("/settle"));
+    expect(settleCall!.headers[X402_API_KEY_HEADER]).toBeUndefined();
   });
 });

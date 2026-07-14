@@ -35,6 +35,25 @@ export type CeloNetwork = typeof CELO_NETWORK;
 export const X402_FACILITATOR_URL = "https://api.x402.celo.org";
 
 /**
+ * Celo Sepolia (testnet) x402 facilitator + network id — for reference / local runs.
+ *
+ * Mainnet (default, above) grants 500 free settlement credits; testnet grants 1000.
+ * Point `X402_FACILITATOR_URL` here and use a testnet-scoped `X402_API_KEY` to settle
+ * on Celo Sepolia (chain 11142220) without spending mainnet credits.
+ */
+export const CELO_SEPOLIA_CHAIN_ID = 11142220;
+export const CELO_SEPOLIA_NETWORK = "eip155:11142220" as const;
+export const X402_FACILITATOR_URL_TESTNET = "https://api.x402.sepolia.celo.org";
+
+/**
+ * Header the Celo facilitator requires on every `POST /settle` (each settle spends
+ * 1 credit). `/verify`, `/supported`, `/health` are public and take no key. Verified
+ * live 2026-07-14: `POST /settle` with no key -> 401 {"error":"unauthorized",
+ * "message":"Missing X-API-Key"}.
+ */
+export const X402_API_KEY_HEADER = "X-API-Key";
+
+/**
  * Celo x402 relayer address — the `tx_from` the Dune Track-2 query keys on.
  * Stored lowercased for direct string comparison against `getTransaction().from`.
  */

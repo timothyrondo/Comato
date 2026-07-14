@@ -30,6 +30,30 @@ the **Celo relayer** `0x0d74d5cefd2e7f24e623330ebe3d8d4cb45ffb48`. That means:
   isn't yet propagated doesn't emit a spurious `x402.relayer.unverified`; it never throws
   and never blocks the settlement (returns `null` → `unverified` only after retries).
 
+## API key & credits (required to settle — read this)
+
+The Celo facilitator's **`POST /settle` requires an `X-API-Key` header** and **spends
+1 credit per settlement**. Verified live (2026-07-14): `POST /settle` with no key →
+`401 {"error":"unauthorized","message":"Missing X-API-Key"}`. Without the key the server
+boots and returns 402s fine but **every paid heartbeat fails at settle** → zero Track 2
+counts. `/verify`, `/supported`, `/health` are **public** (no key).
+
+- **Config:** `X402_API_KEY` (required; zod-validated in `src/config.ts` → `cfg.apiKey`).
+  Create it on the **x402.celo.org dashboard** by signing with the Comato ops wallet
+  (no gas, no tx) — bind it to the same wallet so settlements + credits align.
+- **How it's wired:** `src/x402-server.ts` `celoFacilitatorAuthHeaders(cfg.apiKey)`
+  builds the SDK's `createAuthHeaders` callback and passes it to
+  `new HTTPFacilitatorClient({ url, createAuthHeaders })`. The SDK merges the returned
+  per-path map into each request; we attach `X-API-Key` to **`settle` only** (scoped —
+  `/verify` and `/supported` are public and stay keyless). Header name is
+  `X402_API_KEY_HEADER` (`X-API-Key`) in `src/constants.ts`.
+- **Economics:** **500 free credits mainnet, 1000 testnet**, then top up (~$0.001/credit,
+  $5 = 5,000). At **0 credits `/settle` → 402** until you top up. 1 x402 count = 1 credit.
+- **Endpoints:** mainnet `https://api.x402.celo.org` (Celo **42220**); testnet
+  `https://api.x402.sepolia.celo.org` (Celo Sepolia **11142220**) — see
+  `X402_FACILITATOR_URL_TESTNET` in `src/constants.ts`. Use an `x402_live_…` key on
+  mainnet, `x402_test_…` on testnet.
+
 ## Pricing / token
 
 - Price is an explicit `AssetAmount` — Celo (eip155:42220) is **not** in the SDK's
@@ -72,7 +96,8 @@ they run fully offline.
 | var | purpose |
 |---|---|
 | `COMATO_WALLET` | registered EOA, premium **payee** (required) |
-| `X402_FACILITATOR_URL` | facilitator API base (default `https://api.x402.celo.org`) |
+| `X402_FACILITATOR_URL` | facilitator API base (default `https://api.x402.celo.org`; testnet `https://api.x402.sepolia.celo.org`) |
+| `X402_API_KEY` | **required** — Celo facilitator key, sent as `X-API-Key` on `/settle` (1 credit each; 500 free mainnet / 1000 testnet). `/verify`+`/supported` are public |
 | `CELO_RPC` | RPC for the relayer assertion (default forno) |
 | `PREMIUM_USDC` | premium per heartbeat, decimal USDC (default `0.001`) |
 | `PORT` | server port (default `4021`) |
