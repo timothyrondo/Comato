@@ -1,0 +1,14 @@
+# Test harness for apps/web (bun test).
+# `preload` wires the happy-dom + framer-motion/viem mock environment.
+[test]
+preload = ["./test/setup.ts"]
+coverage = true
+coverageReporter = ["text"]
+# 80% line AND function gate. `bun test --coverage` exits non-zero below this.
+# NOTE: bun uses the PLURAL keys (lines/functions/statements); singular keys are
+# silently ignored (verified against bun 1.3.9).
+coverageThreshold = { lines = 0.8, functions = 0.8 }
+# Excluded from coverage: main.tsx (createRoot entry — no unit-testable surface),
+# *.d.ts (type-only), and the test/ harness itself (setup + helpers).
+coveragePathIgnorePatterns = ["**/main.tsx", "**/vite-env.d.ts", "**/test/**"]
+coverageSkipTestFiles = true

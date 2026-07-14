@@ -27,13 +27,21 @@ import { motion } from "../lib/motion";
 
 // Auto-discover an optional bundled background (empty object if none exists —
 // the file need not be present, so the build stays green either way).
-const bundledBg = Object.values(
-  import.meta.glob("../assets/bg.{jpg,jpeg,png,webp,avif}", {
-    eager: true,
-    query: "?url",
-    import: "default",
-  }),
-)[0] as string | undefined;
+// `import.meta.glob` is a Vite build-time macro replaced at bundle time; under a
+// non-Vite runtime (e.g. `bun test`) it is undefined, so the call is guarded.
+// In the real Vite build the call is statically replaced and never throws.
+let bundledBg: string | undefined;
+try {
+  bundledBg = Object.values(
+    import.meta.glob("../assets/bg.{jpg,jpeg,png,webp,avif}", {
+      eager: true,
+      query: "?url",
+      import: "default",
+    }),
+  )[0] as string | undefined;
+} catch {
+  bundledBg = undefined;
+}
 
 const bgImage =
   (import.meta.env.VITE_BG_IMAGE as string | undefined) || bundledBg;
