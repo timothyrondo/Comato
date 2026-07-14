@@ -41,7 +41,7 @@ export default function PositionScreen({
           type="button"
           onClick={() => onNavigate("home")}
           aria-label="Back to home"
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface text-ink shadow-tile"
+          className="glass-soft flex h-10 w-10 items-center justify-center rounded-full text-ink"
         >
           <ChevronLeft size={20} />
         </button>
@@ -57,7 +57,7 @@ export default function PositionScreen({
           type="button"
           onClick={refresh}
           aria-label="Refresh data"
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface text-ink-soft shadow-tile transition-colors hover:text-ink active:scale-95"
+          className="glass-soft flex h-10 w-10 items-center justify-center rounded-full text-ink-soft transition-colors hover:text-ink active:scale-95"
         >
           <Refresh size={18} />
         </button>
@@ -65,7 +65,7 @@ export default function PositionScreen({
 
       {/* Gauge centerpiece */}
       <section
-        className="rise mt-4 rounded-card border border-line bg-surface px-4 pb-5 pt-6 shadow-card"
+        className="glass rise mt-4 rounded-card px-4 pb-5 pt-6"
         style={{ animationDelay: "40ms" }}
         aria-label="Health factor gauge"
       >
@@ -120,8 +120,8 @@ export default function PositionScreen({
       {/* Rescue plan + timeline */}
       <section className="rise mt-7" style={{ animationDelay: "160ms" }}>
         <SectionHeader title="Rescue plan" />
-        <div className="rounded-card border border-line bg-surface p-5 shadow-card">
-          <div className="flex gap-3 rounded-tile bg-accent-soft/70 p-3.5">
+        <div className="glass rounded-card p-5">
+          <div className="glass-accent flex gap-3 rounded-tile p-3.5">
             <ShieldCheck size={20} className="mt-0.5 shrink-0 text-accent-ink" />
             <p className="text-[13px] leading-relaxed text-accent-ink">
               If your Health Factor drops to {position.rescueHf.toFixed(2)},
@@ -138,8 +138,8 @@ export default function PositionScreen({
 
       {/* Agent card (mirrors the reference's bottom summary card) */}
       <section className="rise mt-4" style={{ animationDelay: "220ms" }}>
-        <div className="flex items-center gap-3.5 rounded-card bg-dark p-4 text-on-dark shadow-dark">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent/18 text-accent-bright">
+        <div className="glass-deep flex items-center gap-3.5 rounded-card p-4 text-on-dark">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent/20 text-accent-bright shadow-[0_0_24px_-6px_rgba(35,209,138,0.7)]">
             <ShieldCheck size={22} />
           </span>
           <div className="min-w-0 flex-1">

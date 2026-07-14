@@ -19,8 +19,8 @@ export default function ActivityCard({ item }: { item: ActivityItem }) {
 
   if (isRescue) {
     return (
-      <article className="flex items-center gap-3.5 rounded-tile bg-dark p-4 text-on-dark shadow-dark">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-accent/18 text-accent-bright">
+      <article className="glass-deep flex items-center gap-3.5 rounded-tile p-4 text-on-dark">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-accent/20 text-accent-bright shadow-[0_0_24px_-6px_rgba(35,209,138,0.7)]">
           <Icon size={21} />
         </span>
         <div className="min-w-0 flex-1">
@@ -46,7 +46,7 @@ export default function ActivityCard({ item }: { item: ActivityItem }) {
   }
 
   return (
-    <article className="flex items-center gap-3.5 rounded-tile border border-line bg-surface p-4 shadow-tile">
+    <article className="glass-soft flex items-center gap-3.5 rounded-tile p-4">
       <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-accent-soft text-accent-ink">
         <Icon size={20} />
       </span>

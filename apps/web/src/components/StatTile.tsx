@@ -4,19 +4,19 @@ type Tone = "light" | "dark" | "accent";
 
 const TONES: Record<Tone, { wrap: string; label: string; sub: string }> = {
   light: {
-    wrap: "bg-surface border border-line shadow-tile",
+    wrap: "glass-soft",
     label: "text-ink-muted",
     sub: "text-ink-soft",
   },
   dark: {
-    wrap: "bg-dark text-on-dark shadow-dark",
+    wrap: "glass-deep text-on-dark",
     label: "text-on-dark-muted",
     sub: "text-on-dark-muted",
   },
   accent: {
-    wrap: "bg-accent-soft border border-accent/15",
-    label: "text-accent-ink/70",
-    sub: "text-accent-ink/80",
+    wrap: "glass-accent",
+    label: "text-accent-ink/80",
+    sub: "text-accent-ink/90",
   },
 };
 

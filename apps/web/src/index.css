@@ -1,37 +1,45 @@
 @import "tailwindcss";
 
 /* ────────────────────────────────────────────────────────────
-   Comato design tokens (Tailwind v4 @theme → utilities)
-   Palette: protective emerald + green-tinted near-black on warm
-   off-white. See apps/web/CLAUDE.md for the full rationale.
+   Comato design tokens — glassmorphism / visionOS
+   Frosted translucent surfaces over a deep, blurred emerald-black
+   canvas. Protective-green accent adapted to glass (glow on dark).
+   See apps/web/CLAUDE.md → "Design system (glass)" for rationale.
    ──────────────────────────────────────────────────────────── */
 @theme {
-  /* Surfaces */
-  --color-bg: #eef0eb; /* warm off-white canvas */
-  --color-surface: #ffffff; /* floating cards */
-  --color-line: #e6e8e2; /* hairline borders */
+  /* Canvas (behind the glass) — deep emerald-tinted near-black */
+  --color-bg: #060b09;
+  --color-bg-2: #0a1310;
 
-  /* Ink */
-  --color-ink: #14181a; /* primary text */
-  --color-ink-soft: #4a534d; /* secondary text */
-  --color-ink-muted: #858c86; /* captions / labels */
+  /* Ink — light text on dark glass */
+  --color-ink: #ecf4ef; /* primary */
+  --color-ink-soft: #b3c2b8; /* secondary */
+  --color-ink-muted: #7f8e84; /* captions / labels */
 
-  /* Dark — green-tinted near-black (CTA + dark tiles) */
-  --color-dark: #132018;
-  --color-dark-soft: #1d2c23;
-  --color-on-dark: #f3f6f2;
-  --color-on-dark-muted: #9db0a3;
+  /* Hairlines / dividers — light on dark (glass edges) */
+  --color-line: rgba(255, 255, 255, 0.1);
+  --color-line-soft: rgba(255, 255, 255, 0.06);
 
-  /* Accent — protective emerald */
-  --color-accent: #17a672;
-  --color-accent-bright: #22c588;
-  --color-accent-ink: #0c5c40; /* accent text on light */
-  --color-accent-soft: #dff3e8; /* accent tint bg */
+  /* A translucent fill fallback for the odd `bg-surface` usage */
+  --color-surface: rgba(255, 255, 255, 0.06);
 
-  /* Risk semantics */
-  --color-safe: #17a672;
-  --color-warn: #e3a03a;
-  --color-danger: #e5484d;
+  /* "Dark" tone — now a deep frosted well (emphasis tiles) + its ink */
+  --color-dark: rgba(6, 14, 11, 0.55);
+  --color-dark-soft: rgba(10, 20, 16, 0.7);
+  --color-on-dark: #ecf4ef;
+  --color-on-dark-muted: #9fb2a6;
+
+  /* Accent — protective emerald, tuned to glow on dark glass */
+  --color-accent: #23d18a;
+  --color-accent-bright: #57f0a8;
+  --color-accent-ink: #7cf0ba; /* accent text on dark */
+  --color-accent-deep: #0c8a5a;
+  --color-accent-soft: rgba(35, 209, 138, 0.14); /* accent tint bg */
+
+  /* Risk semantics — brightened for dark */
+  --color-safe: #23d18a;
+  --color-warn: #f2b750;
+  --color-danger: #ff5f66;
 
   /* Type */
   --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
@@ -40,15 +48,17 @@
   /* Radii */
   --radius-card: 1.75rem; /* 28px */
   --radius-tile: 1.25rem; /* 20px */
+  --radius-panel: 2rem; /* 32px — desktop glass panels */
 
-  /* Shadows — soft, low, generous */
-  --shadow-card: 0 1px 2px rgba(19, 32, 24, 0.04),
-    0 10px 28px -14px rgba(19, 32, 24, 0.16);
-  --shadow-tile: 0 1px 2px rgba(19, 32, 24, 0.05),
-    0 6px 16px -10px rgba(19, 32, 24, 0.16);
-  --shadow-dark: 0 1px 2px rgba(19, 32, 24, 0.2),
-    0 18px 40px -18px rgba(19, 32, 24, 0.5);
-  --shadow-float: 0 40px 90px -50px rgba(19, 32, 24, 0.55);
+  /* Shadows — deep + soft for a dark canvas */
+  --shadow-tile: 0 2px 8px -4px rgba(0, 0, 0, 0.5),
+    0 14px 34px -22px rgba(0, 0, 0, 0.7);
+  --shadow-card: 0 4px 14px -6px rgba(0, 0, 0, 0.55),
+    0 26px 60px -32px rgba(0, 0, 0, 0.8);
+  --shadow-dark: 0 6px 18px -8px rgba(0, 0, 0, 0.6),
+    0 30px 70px -30px rgba(0, 0, 0, 0.85);
+  --shadow-float: 0 50px 120px -50px rgba(0, 0, 0, 0.85);
+  --shadow-glow: 0 0 44px -10px rgba(35, 209, 138, 0.55);
 }
 
 @layer base {
@@ -80,13 +90,114 @@
     box-shadow:
       0 0 0 2px var(--color-bg),
       0 0 0 4px var(--color-accent);
-    border-radius: 0.5rem;
+    border-radius: 0.75rem;
   }
   /* Tabular figures for financial data */
   .tnum {
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum" 1;
   }
+  ::selection {
+    background: rgba(35, 209, 138, 0.3);
+    color: #fff;
+  }
+}
+
+/* ────────────────────────────────────────────────────────────
+   Glass surfaces — the core of the visionOS look.
+   Frosted translucent fills, a top light edge, a hairline border,
+   and depth from a soft drop shadow. Three elevations + tints.
+   ──────────────────────────────────────────────────────────── */
+.glass {
+  position: relative;
+  background:
+    linear-gradient(
+      156deg,
+      rgba(255, 255, 255, 0.11) 0%,
+      rgba(255, 255, 255, 0.045) 46%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
+  -webkit-backdrop-filter: blur(30px) saturate(160%);
+  backdrop-filter: blur(30px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22),
+    var(--shadow-card);
+}
+.glass-soft {
+  position: relative;
+  background:
+    linear-gradient(
+      156deg,
+      rgba(255, 255, 255, 0.085) 0%,
+      rgba(255, 255, 255, 0.03) 100%
+    );
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    var(--shadow-tile);
+}
+/* Deep frosted well — the former "dark" tone (emphasis surfaces). */
+.glass-deep {
+  position: relative;
+  background:
+    linear-gradient(
+      156deg,
+      rgba(10, 22, 17, 0.72) 0%,
+      rgba(6, 13, 10, 0.66) 100%
+    );
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 0 60px -30px rgba(35, 209, 138, 0.5),
+    var(--shadow-dark);
+}
+/* Emerald-tinted glass — protection accent surfaces. */
+.glass-accent {
+  position: relative;
+  background:
+    linear-gradient(
+      156deg,
+      rgba(35, 209, 138, 0.24) 0%,
+      rgba(35, 209, 138, 0.07) 52%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
+  -webkit-backdrop-filter: blur(26px) saturate(160%);
+  backdrop-filter: blur(26px) saturate(160%);
+  border: 1px solid rgba(87, 240, 168, 0.3);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 0 50px -18px rgba(35, 209, 138, 0.45),
+    var(--shadow-card);
+}
+/* Small inset chip (wallet rows, badge wells) — subtle frost. */
+.glass-chip {
+  background: rgba(255, 255, 255, 0.06);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+/* Emerald primary button — bright gradient + protection glow. */
+.btn-primary {
+  background: linear-gradient(180deg, #35e3a0 0%, #17b978 100%);
+  color: #052015;
+  border: 1px solid rgba(120, 255, 200, 0.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 10px 30px -10px rgba(35, 209, 138, 0.65),
+    0 0 40px -14px rgba(35, 209, 138, 0.6);
+}
+.btn-primary:hover {
+  background: linear-gradient(180deg, #46ecaa 0%, #1fc985 100%);
+}
+.glow {
+  box-shadow: var(--shadow-glow);
 }
 
 /* ── Motion ──────────────────────────────────────────────── */
@@ -127,6 +238,15 @@
     stroke-dashoffset: 0;
   }
 }
+@keyframes comato-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0, -3%, 0) scale(1.06);
+  }
+}
 
 .rise {
   opacity: 0;
@@ -141,6 +261,9 @@
 .ecg-draw {
   stroke-dasharray: 240;
   animation: comato-ecg 2.4s ease-out forwards;
+}
+.drift {
+  animation: comato-drift 18s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -157,7 +280,7 @@
   }
 }
 
-/* Hide scrollbars inside the phone frame for a native feel */
+/* Hide scrollbars for a native feel (phone frame + desktop rails) */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }

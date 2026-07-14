@@ -35,7 +35,7 @@ export default function AccountScreen() {
 
       {/* Profile card */}
       <section
-        className="rise mt-4 rounded-card bg-dark p-5 text-on-dark shadow-dark"
+        className="glass-deep rise mt-4 rounded-card p-5 text-on-dark"
         style={{ animationDelay: "40ms" }}
       >
         <div className="flex items-center gap-4">
@@ -45,7 +45,7 @@ export default function AccountScreen() {
             <div className="text-[13px] text-on-dark-muted">@{user.handle}</div>
           </div>
         </div>
-        <div className="mt-4 flex items-center justify-between rounded-tile bg-white/5 px-4 py-3">
+        <div className="glass-chip mt-4 flex items-center justify-between rounded-tile px-4 py-3">
           <span className="text-[12px] text-on-dark-muted">Wallet</span>
           <span className="tnum text-[13px] font-semibold">
             {user.walletShort}
@@ -55,7 +55,7 @@ export default function AccountScreen() {
 
       {/* Settings list */}
       <section
-        className="rise mt-4 overflow-hidden rounded-card border border-line bg-surface shadow-card"
+        className="glass rise mt-4 overflow-hidden rounded-card"
         style={{ animationDelay: "100ms" }}
       >
         {ROWS.map(({ Icon, label, value }, i) => (
@@ -63,7 +63,7 @@ export default function AccountScreen() {
             key={label}
             type="button"
             className={
-              "flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors hover:bg-line/30 " +
+              "flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors hover:bg-white/5 " +
               (i > 0 ? "border-t border-line" : "")
             }
           >

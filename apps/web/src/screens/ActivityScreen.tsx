@@ -90,10 +90,10 @@ export default function ActivityScreen() {
               aria-selected={active}
               onClick={() => setFilter(f.id)}
               className={
-                "shrink-0 rounded-full px-4 py-2 text-[13px] font-semibold transition-colors " +
+                "shrink-0 rounded-full px-4 py-2 text-[13px] font-semibold transition-all " +
                 (active
-                  ? "bg-dark text-on-dark shadow-dark"
-                  : "border border-line bg-surface text-ink-soft")
+                  ? "bg-gradient-to-b from-accent-bright to-accent text-[#052015] shadow-[0_0_22px_-6px_rgba(35,209,138,0.85)]"
+                  : "glass-soft text-ink-soft")
               }
             >
               {f.label}
@@ -128,7 +128,7 @@ export default function ActivityScreen() {
         })}
 
         {visible.length === 0 && (
-          <p className="rounded-tile border border-dashed border-line bg-surface/60 px-4 py-8 text-center text-[13px] text-ink-muted">
+          <p className="glass-soft rounded-tile border-dashed px-4 py-8 text-center text-[13px] text-ink-muted">
             No activity for this filter.
           </p>
         )}

@@ -12,9 +12,9 @@ const START = -135; // lower-left
 const SWEEP = 270; // clockwise, gap at the bottom
 
 const RISK_HEX: Record<RiskLevel, string> = {
-  safe: "#17a672",
-  warn: "#e3a03a",
-  danger: "#e5484d",
+  safe: "#23d18a",
+  warn: "#f2b750",
+  danger: "#ff5f66",
 };
 
 function polar(cx: number, cy: number, r: number, deg: number) {
@@ -107,39 +107,50 @@ export default function HealthRing({
         role="img"
         aria-label={`Health factor ${value.toFixed(2)}, status ${riskCopy[level]}`}
       >
+        <defs>
+          <filter id="hr-glow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="4" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
         {/* Base track */}
         <path
           d={arc(min, max, 0, 0)}
           fill="none"
-          stroke="var(--color-line)"
+          stroke="rgba(255,255,255,0.08)"
           strokeWidth={stroke}
           strokeLinecap="round"
         />
-        {/* Risk zones */}
-        <path
-          d={arc(min, rescueHf, 0, gap / 2)}
-          fill="none"
-          stroke={RISK_HEX.danger}
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          opacity={0.9}
-        />
-        <path
-          d={arc(rescueHf, warnHf, gap / 2, gap / 2)}
-          fill="none"
-          stroke={RISK_HEX.warn}
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          opacity={0.9}
-        />
-        <path
-          d={arc(warnHf, max, gap / 2, 0)}
-          fill="none"
-          stroke={RISK_HEX.safe}
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          opacity={0.9}
-        />
+        {/* Risk zones (glowing) */}
+        <g filter="url(#hr-glow)">
+          <path
+            d={arc(min, rescueHf, 0, gap / 2)}
+            fill="none"
+            stroke={RISK_HEX.danger}
+            strokeWidth={stroke}
+            strokeLinecap="round"
+            opacity={0.95}
+          />
+          <path
+            d={arc(rescueHf, warnHf, gap / 2, gap / 2)}
+            fill="none"
+            stroke={RISK_HEX.warn}
+            strokeWidth={stroke}
+            strokeLinecap="round"
+            opacity={0.95}
+          />
+          <path
+            d={arc(warnHf, max, gap / 2, 0)}
+            fill="none"
+            stroke={RISK_HEX.safe}
+            strokeWidth={stroke}
+            strokeLinecap="round"
+            opacity={0.95}
+          />
+        </g>
 
         {/* Liquidation tick */}
         <line
@@ -147,7 +158,7 @@ export default function HealthRing({
           y1={liqInner.y}
           x2={liqOuter.x}
           y2={liqOuter.y}
-          stroke="var(--color-dark)"
+          stroke="rgba(255,255,255,0.55)"
           strokeWidth={2.5}
           strokeLinecap="round"
         />
@@ -171,7 +182,7 @@ export default function HealthRing({
             transition: "opacity 260ms ease 120ms",
           }}
         >
-          <circle cx={knob.x} cy={knob.y} r={13} fill="var(--color-surface)" />
+          <circle cx={knob.x} cy={knob.y} r={13} fill="#0a1310" />
           <circle
             cx={knob.x}
             cy={knob.y}
@@ -179,6 +190,7 @@ export default function HealthRing({
             fill="none"
             stroke={RISK_HEX[level]}
             strokeWidth={4}
+            filter="url(#hr-glow)"
           />
           <circle cx={knob.x} cy={knob.y} r={4.5} fill={RISK_HEX[level]} />
         </g>

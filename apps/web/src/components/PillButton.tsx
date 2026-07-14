@@ -3,9 +3,8 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 type Variant = "dark" | "light" | "ghost";
 
 const VARIANTS: Record<Variant, string> = {
-  dark: "bg-dark text-on-dark shadow-dark hover:bg-dark-soft active:scale-[0.985]",
-  light:
-    "bg-surface text-ink border border-line shadow-tile hover:bg-line/40 active:scale-[0.985]",
+  dark: "btn-primary active:scale-[0.985]",
+  light: "glass-soft text-ink hover:brightness-125 active:scale-[0.985]",
   ghost: "bg-transparent text-ink hover:bg-ink/5 active:scale-[0.985]",
 };
 

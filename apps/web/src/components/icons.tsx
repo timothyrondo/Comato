@@ -130,3 +130,35 @@ export const Settings = (p: IconProps) => (
     <path d="M12 3v2.5M12 18.5V21M4.2 7.5l2.2 1.3M17.6 15.2l2.2 1.3M4.2 16.5l2.2-1.3M17.6 8.8l2.2-1.3" />
   </Base>
 );
+
+export const Grid = (p: IconProps) => (
+  <Base {...p}>
+    <rect x="4" y="4" width="7" height="7" rx="1.6" />
+    <rect x="13" y="4" width="7" height="7" rx="1.6" />
+    <rect x="4" y="13" width="7" height="7" rx="1.6" />
+    <rect x="13" y="13" width="7" height="7" rx="1.6" />
+  </Base>
+);
+
+export const AlertTriangle = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M12 4.5 21 19.5H3L12 4.5Z" />
+    <path d="M12 10v4" />
+    <circle cx="12" cy="16.8" r="0.6" fill="currentColor" stroke="none" />
+  </Base>
+);
+
+export const Bell = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z" />
+    <path d="M10 19a2 2 0 0 0 4 0" />
+  </Base>
+);
+
+export const Wallet = (p: IconProps) => (
+  <Base {...p}>
+    <rect x="3.5" y="6" width="17" height="13" rx="3" />
+    <path d="M3.5 9.5h17" />
+    <circle cx="16.5" cy="13.5" r="1.1" fill="currentColor" stroke="none" />
+  </Base>
+);

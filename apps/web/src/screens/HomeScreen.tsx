@@ -39,22 +39,18 @@ export default function HomeScreen({
 
       {/* Hero status card */}
       <section
-        className="rise relative mt-5 overflow-hidden rounded-card border border-accent/10 p-6 shadow-card"
-        style={{
-          background:
-            "radial-gradient(120% 120% at 85% -10%, rgba(34,197,136,0.20), transparent 55%), linear-gradient(160deg, #ffffff 0%, #f3faf5 100%)",
-          animationDelay: "40ms",
-        }}
+        className="glass-accent rise relative mt-5 overflow-hidden rounded-card p-6"
+        style={{ animationDelay: "40ms" }}
         aria-labelledby="hero-status"
       >
         <PulseLine
-          className="pointer-events-none absolute inset-x-0 bottom-4 h-14 w-full text-accent/25"
+          className="pointer-events-none absolute inset-x-0 bottom-4 h-14 w-full text-accent-bright/40"
           animate
           strokeWidth={2}
         />
         <div className="relative">
-          <span className="inline-flex items-center gap-2 rounded-full bg-accent-soft px-3 py-1 text-[12px] font-semibold text-accent-ink">
-            <span className="pulse-dot h-2 w-2 rounded-full bg-accent" />
+          <span className="glass-chip inline-flex items-center gap-2 rounded-full px-3 py-1 text-[12px] font-semibold text-accent-ink">
+            <span className="pulse-dot h-2 w-2 rounded-full bg-accent-bright" />
             Protection active
           </span>
 
@@ -65,7 +61,7 @@ export default function HomeScreen({
             >
               Protected
             </h2>
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-on-dark shadow-[0_6px_16px_-6px_rgba(23,166,114,0.8)]">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-b from-accent-bright to-accent text-[#052015] shadow-[0_0_22px_-4px_rgba(35,209,138,0.9)]">
               <ShieldCheck size={20} />
             </span>
           </div>
@@ -146,7 +142,7 @@ export default function HomeScreen({
         {activity[0] ? (
           <ActivityCard item={activity[0]} />
         ) : (
-          <p className="rounded-tile border border-dashed border-line bg-surface/60 px-4 py-6 text-center text-[13px] text-ink-muted">
+          <p className="glass-soft rounded-tile border-dashed px-4 py-6 text-center text-[13px] text-ink-muted">
             No rescues yet — your position is safe.
           </p>
         )}

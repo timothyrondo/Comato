@@ -23,7 +23,7 @@ export default function TabBar({
       aria-label="Main navigation"
       className="absolute inset-x-0 bottom-0 z-20 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2"
     >
-      <div className="mx-auto flex items-center justify-around rounded-[1.75rem] border border-line/70 bg-surface/90 px-2 py-2 shadow-card backdrop-blur-xl">
+      <div className="glass mx-auto flex items-center justify-around rounded-[1.75rem] px-2 py-2">
         {TABS.map(({ id, label, Icon }) => {
           const isActive = active === id;
           return (
@@ -37,9 +37,9 @@ export default function TabBar({
             >
               <span
                 className={
-                  "flex h-9 w-9 items-center justify-center rounded-full transition-colors duration-200 " +
+                  "flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200 " +
                   (isActive
-                    ? "bg-dark text-on-dark"
+                    ? "bg-gradient-to-b from-accent-bright to-accent text-[#052015] shadow-[0_0_20px_-4px_rgba(35,209,138,0.85)]"
                     : "text-ink-muted group-hover:text-ink")
                 }
               >
