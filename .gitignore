@@ -1,0 +1,18 @@
+node_modules/
+dist/
+build/
+*.log
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# foundry
+packages/contracts/out/
+packages/contracts/cache/
+packages/contracts/broadcast/**/dry-run/
+
+# vite
+apps/web/dist/
+.DS_Store
