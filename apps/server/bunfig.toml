@@ -1,0 +1,13 @@
+# Bun test config for apps/server (verified against bun 1.3.9).
+[test]
+# `bun test` collects coverage on every run.
+coverage = true
+# Drop the test files themselves from the coverage table (report source only).
+coverageSkipTestFiles = true
+# `src/index.ts` is the boot entrypoint (Bun.serve + SIGINT/SIGTERM wiring) — it has no
+# unit-testable surface and is exercised by running the server, so exclude it from the gate.
+coveragePathIgnorePatterns = ["src/index.ts"]
+# Fail `bun test` (non-zero exit) when line OR function coverage falls below 80%.
+# NOTE: bun 1.3.9 uses PLURAL object keys (`lines`/`functions`/`statements`); the
+# singular forms are silently ignored. Omitting `statements` gates on line + func only.
+coverageThreshold = { lines = 0.80, functions = 0.80 }
