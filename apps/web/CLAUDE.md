@@ -41,4 +41,4 @@ Minimum to go live: `VITE_RPC_URL` + `VITE_SUBSCRIBER_ADDR` + one of (`VITE_POLI
 - **`bun run demo`** (from the repo root) — fork Celo + deploy + real rescue + serve the live UI. See `DEMO.md`.
 
 ## Rules
-- Preserve the premium design (don't regress the look). UI copy in clear, natural English. Import addresses/ABIs, don't guess them. Keep **zero redacted traces** (identity: Timo / timothyrondo).
+- Preserve the premium design (don't regress the look). UI copy in clear, natural English. Import addresses/ABIs, don't guess them. Author identity: **Timo / timothyrondo**.

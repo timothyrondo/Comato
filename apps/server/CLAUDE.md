@@ -98,4 +98,4 @@ holds placeholders.
 5. The client loop repeats every `HEARTBEAT_INTERVAL_MS` across all subscribers,
    accumulating count over the 6-day run.
 
-**Identity:** commits/authorship are **Timo / timothyrondo** — never `redacted`.
+**Identity:** commits/authorship are **Timo / timothyrondo**.
