@@ -2,8 +2,8 @@
  * x402 resource-server wiring for Comato.
  *
  * THE CRITICAL REQUIREMENT (Track 2): settlements MUST route through Celo's
- * facilitator (`https://x402.celo.org`), whose relayer is
- * `0x0d74...FB48`. thirdweb's default facilitator submits from a different
+ * facilitator (`https://api.x402.celo.org`), whose relayer is
+ * `0x0d74...FB48`. Any other facilitator submits from a different
  * relayer and would settle fine but NOT count for Track 2. This module:
  *   1. builds the resource server against `HTTPFacilitatorClient({ url })` (Celo), and
  *   2. in `onAfterSettle`, reads the settling tx on-chain and asserts its sender is

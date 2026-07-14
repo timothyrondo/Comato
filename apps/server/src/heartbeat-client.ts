@@ -3,44 +3,47 @@
  *
  * Drives paid `GET /heartbeat` calls from one or more self-operated test
  * subscriber wallets (`SUBSCRIBER_PRIVATE_KEYS`). Each subscriber signs an
- * EIP-3009 authorization per request via thirdweb's `wrapFetchWithPayment`; the
- * server settles it through the Celo facilitator. One settlement == one Track 2
- * count. Runs a configurable interval/concurrency loop with graceful shutdown.
+ * EIP-3009 authorization per request with the official `@x402/*` SDK (viem-based,
+ * the same client family x402.celo.org runs); the server settles it through the
+ * Celo facilitator. One settlement == one Track 2 count. Runs a configurable
+ * interval/concurrency loop with graceful shutdown.
  *
  *   bun run heartbeat
  */
 
-import { createThirdwebClient } from "thirdweb";
-import { createWalletAdapter, privateKeyToAccount } from "thirdweb/wallets";
-import { celo } from "thirdweb/chains";
-import { wrapFetchWithPayment } from "thirdweb/x402";
+import { privateKeyToAccount } from "viem/accounts";
+import { x402Client } from "@x402/core/client";
+import { x402HTTPClient } from "@x402/core/http";
+import { ExactEvmScheme } from "@x402/evm/exact/client";
+import { toClientEvmSigner } from "@x402/evm";
+import { CELO_NETWORK } from "./constants.ts";
 import { loadClientConfig, type ClientConfig } from "./config.ts";
 import { logger } from "./logger.ts";
-
-type PayFetch = ReturnType<typeof wrapFetchWithPayment>;
 
 interface Subscriber {
   address: string;
   url: string;
-  fetchWithPay: PayFetch;
+  client: x402HTTPClient;
 }
 
 /**
- * In-memory storage for the permit cache thirdweb's x402 client expects. Avoids any
- * `localStorage` dependency in a server/CLI runtime (the "exact" scheme does not use it).
+ * Build a per-subscriber x402 HTTP client bound to that wallet's key. The exact
+ * EVM scheme signs an EIP-3009 authorization; a maxValue policy refuses any
+ * requirement above the per-payment ceiling (guards a mispriced/hostile route).
  */
-const memoryStorage = (() => {
-  const store = new Map<string, string>();
-  return {
-    getItem: async (key: string): Promise<string | null> => store.get(key) ?? null,
-    setItem: async (key: string, value: string): Promise<void> => {
-      store.set(key, value);
-    },
-    removeItem: async (key: string): Promise<void> => {
-      store.delete(key);
-    },
-  };
-})();
+function buildSubscriberClient(
+  privateKey: `0x${string}`,
+  maxValueAtomic: bigint,
+): { address: string; client: x402HTTPClient } {
+  const account = privateKeyToAccount(privateKey);
+  const signer = toClientEvmSigner(account);
+  const core = new x402Client()
+    .register(CELO_NETWORK, new ExactEvmScheme(signer))
+    .registerPolicy((_version, requirements) =>
+      requirements.filter((r) => BigInt(r.amount) <= maxValueAtomic),
+    );
+  return { address: account.address, client: new x402HTTPClient(core) };
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -62,12 +65,10 @@ async function runPool<T>(items: T[], concurrency: number, worker: (item: T) => 
 }
 
 /** Pulls the settlement tx hash out of the x402 payment-response header, if present. */
-function decodeSettlementTx(headers: Headers): string | undefined {
-  const raw = headers.get("payment-response") ?? headers.get("x-payment-response");
-  if (!raw) return undefined;
+function decodeSettlementTx(client: x402HTTPClient, headers: Headers): string | undefined {
   try {
-    const decoded = JSON.parse(Buffer.from(raw, "base64").toString("utf8")) as { transaction?: string };
-    return decoded.transaction;
+    const settle = client.getPaymentSettleResponse((n) => headers.get(n));
+    return settle.transaction || undefined;
   } catch {
     return undefined;
   }
@@ -75,13 +76,38 @@ function decodeSettlementTx(headers: Headers): string | undefined {
 
 async function heartbeatOnce(sub: Subscriber): Promise<void> {
   try {
-    const res = await sub.fetchWithPay(sub.url, { method: "GET" });
+    let res = await fetch(sub.url, { method: "GET" });
+
+    // x402 handshake: on 402, sign an EIP-3009 authorization and retry with the
+    // PAYMENT-SIGNATURE header. The server verifies + settles via the Celo facilitator.
+    if (res.status === 402) {
+      let body: unknown;
+      try {
+        body = await res.clone().json();
+      } catch {
+        body = undefined;
+      }
+      const required = sub.client.getPaymentRequiredResponse((n) => res.headers.get(n), body);
+      let payload;
+      try {
+        payload = await sub.client.createPaymentPayload(required);
+      } catch (err) {
+        // No affordable/supported requirement (e.g. price above MAX_PAYMENT_USDC).
+        logger.warn("heartbeat.declined", { subscriber: sub.address, error: String(err) });
+        return;
+      }
+      res = await fetch(sub.url, {
+        method: "GET",
+        headers: { ...sub.client.encodePaymentSignatureHeader(payload) },
+      });
+    }
+
     if (res.status !== 200) {
       const body = await res.text().catch(() => "");
       logger.warn("heartbeat.non200", { subscriber: sub.address, status: res.status, body: body.slice(0, 200) });
       return;
     }
-    const tx = decodeSettlementTx(res.headers);
+    const tx = decodeSettlementTx(sub.client, res.headers);
     logger.info("heartbeat.paid", { subscriber: sub.address, tx });
   } catch (err) {
     logger.error("heartbeat.error", { subscriber: sub.address, error: String(err) });
@@ -89,29 +115,9 @@ async function heartbeatOnce(sub: Subscriber): Promise<void> {
 }
 
 export async function runHeartbeats(cfg: ClientConfig = loadClientConfig()): Promise<void> {
-  const client = createThirdwebClient({ secretKey: cfg.thirdwebSecretKey });
-
   const subscribers: Subscriber[] = cfg.subscriberKeys.map((privateKey) => {
-    const account = privateKeyToAccount({ client, privateKey });
-    const wallet = createWalletAdapter({
-      client,
-      adaptedAccount: account,
-      chain: celo,
-      onDisconnect: () => {},
-      // Fail-closed: this client only ever pays the Celo heartbeat. A chain-switch
-      // request means the server offered payment requirements for a different
-      // chain/asset; refuse rather than sign against an unintended domain. (A no-op
-      // here would let wrapFetchWithPayment proceed to sign the off-chain
-      // requirement even though the wallet never switched.)
-      switchChain: () => {
-        throw new Error("heartbeat: chain switch not supported (Celo only)");
-      },
-    });
-    const fetchWithPay = wrapFetchWithPayment(fetch, client, wallet, {
-      maxValue: cfg.maxValueAtomic,
-      storage: memoryStorage,
-    });
-    return { address: account.address, url: cfg.heartbeatUrl, fetchWithPay };
+    const { address, client } = buildSubscriberClient(privateKey, cfg.maxValueAtomic);
+    return { address, url: cfg.heartbeatUrl, client };
   });
 
   logger.info("heartbeat.start", {

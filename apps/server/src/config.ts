@@ -96,7 +96,6 @@ export function loadServerConfig(env: Env = process.env): ServerConfig {
 export interface ClientConfig {
   heartbeatUrl: string;
   subscriberKeys: `0x${string}`[];
-  thirdwebSecretKey: string;
   intervalMs: number;
   concurrency: number;
   /** Total heartbeats to send before stopping. 0 = run forever. */
@@ -109,7 +108,6 @@ export function loadClientConfig(env: Env = process.env): ClientConfig {
   const schema = z.object({
     HEARTBEAT_URL: z.string().url().default("http://localhost:4021/heartbeat"),
     SUBSCRIBER_PRIVATE_KEYS: z.string().min(1, "SUBSCRIBER_PRIVATE_KEYS is required"),
-    THIRDWEB_SECRET_KEY: z.string().min(1, "THIRDWEB_SECRET_KEY is required"),
     HEARTBEAT_INTERVAL_MS: z.coerce.number().int().positive().default(15000),
     HEARTBEAT_CONCURRENCY: z.coerce.number().int().positive().optional(),
     HEARTBEAT_MAX: z.coerce.number().int().nonnegative().default(0),
@@ -136,7 +134,6 @@ export function loadClientConfig(env: Env = process.env): ClientConfig {
   return {
     heartbeatUrl: parsed.HEARTBEAT_URL,
     subscriberKeys: keys,
-    thirdwebSecretKey: parsed.THIRDWEB_SECRET_KEY,
     intervalMs: parsed.HEARTBEAT_INTERVAL_MS,
     concurrency: parsed.HEARTBEAT_CONCURRENCY ?? keys.length,
     maxHeartbeats: parsed.HEARTBEAT_MAX,

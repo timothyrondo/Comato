@@ -27,9 +27,9 @@ export type CeloNetwork = typeof CELO_NETWORK;
  * SDK. The architecture doc's "facilitator https://x402.celo.org" refers to the
  * human-facing site; the settle/verify/supported API lives at `api.x402.celo.org`
  * (its `/supported` `signers` map lists the eip155:42220 relayer as X402_RELAYER
- * below — confirming this is the Celo facilitator, not thirdweb's default).
+ * below — confirming this is Celo's own facilitator).
  *
- * MUST stay Celo's facilitator — thirdweb's default submits from a different
+ * MUST stay Celo's facilitator — any other facilitator submits from a different
  * relayer, which settles fine but does NOT count for Track 2.
  */
 export const X402_FACILITATOR_URL = "https://api.x402.celo.org";

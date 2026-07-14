@@ -13,7 +13,7 @@ Track 2 (Dune constraint **C2**) only counts settlements whose on-chain `tx_from
 the **Celo relayer** `0x0d74d5cefd2e7f24e623330ebe3d8d4cb45ffb48`. That means:
 
 - The facilitator **must** be Celo's: `HTTPFacilitatorClient({ url: "https://api.x402.celo.org" })`.
-  thirdweb's default facilitator settles from a **different** relayer — it works, but
+  Any other facilitator settles from a **different** relayer — it works, but
   counts for **nothing**.
 - **Base URL = the `api.` host.** Verified against the live endpoint:
   `https://api.x402.celo.org/supported` returns JSON; `https://x402.celo.org/supported`
@@ -72,14 +72,14 @@ src/logger.ts          structured JSON-lines logger
 src/x402-server.ts     facilitator + resource server + onAfterSettle relayer assertion
 src/app.ts             Hono app: GET /heartbeat (paid) + GET /health (open)
 src/index.ts           boot + graceful shutdown (Bun.serve)
-src/heartbeat-client.ts  subscriber loop (wrapFetchWithPayment) — the count engine
+src/heartbeat-client.ts  subscriber loop (@x402/* payer client) — the count engine
 test/heartbeat.test.ts  402 unpaid, 200 paid + settle, relayer classification
 ```
 
 ## Run
 
 ```bash
-cp .env.example .env         # fill COMATO_WALLET, SUBSCRIBER_PRIVATE_KEYS, THIRDWEB_SECRET_KEY
+cp .env.example .env         # fill COMATO_WALLET, X402_API_KEY, SUBSCRIBER_PRIVATE_KEYS
 bun run start                # server (bun run dev = watch mode)
 bun run heartbeat            # in another shell: drive paid heartbeats
 bun run typecheck            # tsc --noEmit
@@ -104,7 +104,6 @@ they run fully offline.
 | `X402_SYNC_ON_START` / `X402_ASSERT_RELAYER` | facilitator sync / relayer check toggles |
 | `HEARTBEAT_URL` | client target (default `http://localhost:4021/heartbeat`) |
 | `SUBSCRIBER_PRIVATE_KEYS` | comma-separated 0x keys of test subscribers (client) |
-| `THIRDWEB_SECRET_KEY` | thirdweb SDK secret (client) |
 | `HEARTBEAT_INTERVAL_MS` / `HEARTBEAT_CONCURRENCY` / `HEARTBEAT_MAX` | loop cadence |
 | `MAX_PAYMENT_USDC` | per-payment ceiling guard (client, default `0.01`) |
 
@@ -114,7 +113,7 @@ holds placeholders.
 ## How the Track 2 count is earned
 
 1. Subscriber client `GET /heartbeat` → server replies `402` with the price + `payTo`.
-2. Client signs an EIP-3009 authorization (`wrapFetchWithPayment`), retries with the
+2. Client signs an EIP-3009 authorization (the `@x402/*` payer client), retries with the
    `PAYMENT-SIGNATURE` header.
 3. Server verifies + settles via `api.x402.celo.org`; the Celo relayer (`0x0d74…FB48`)
    submits the on-chain transfer to `COMATO_WALLET`.
