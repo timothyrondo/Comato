@@ -13,6 +13,7 @@
 
 import { parseEther, type Address } from "viem";
 import { comatoVaultAbi, comatoVaultFactoryAbi, erc20Abi } from "./abis";
+import { TOKENS } from "./constants";
 import { walletChain } from "./wallet";
 
 export type Hex = `0x${string}`;
@@ -20,21 +21,94 @@ export type Hex = `0x${string}`;
 export const ZERO_ADDRESS: Address =
   "0x0000000000000000000000000000000000000000";
 
-/** createVault defaults for the demo (collateral USDT → debt USDC). CELO cannot be Aave
- *  collateral on Celo today — its supply cap is full — so the position uses USDT collateral;
- *  the USDT->USDC deleverage swap is liquid on the fee-100 pool. */
+/**
+ * Shared createVault params — the ones that DON'T depend on which collateral the
+ * user picks. The per-collateral params (addresses, decimals, poolFee, and now
+ * the debt asset itself) come from the chosen {@link CollateralOption} below.
+ */
 export const VAULT_DEFAULTS = {
-  poolFee: 100,
   feeBps: 500n,
   /** Rescue fires strictly below this WAD health factor. */
   hfThreshold: parseEther("1.3"),
   /** Ceiling a rescue may lift HF to (bounds over-deleverage). */
   targetHf: parseEther("1.6"),
-  /** USDT collateral decimals. */
-  collateralDecimals: 6,
-  /** USDC debt decimals. */
-  debtDecimals: 6,
 } as const;
+
+/** Every supported debt asset (USDC, USDT) is a 6-decimal EIP-3009 stable. */
+export const DEBT_DECIMALS = 6;
+
+/**
+ * A collateral the user can open a vault against. Each option carries its OWN
+ * debt asset + Uniswap V3 fee tier: the rescue deleverages by swapping
+ * collateral→debt on `poolFee`, so BOTH the Aave supply-cap room AND that pool's
+ * liquidity were verified on-chain per option — don't add others blindly.
+ *
+ *  - WETH → USDT (fee 3000): the volatile-collateral headline. WETH/USDC has no
+ *    Celo pool, but WETH/USDT is liquid, so a WETH vault borrows USDT.
+ *  - USDT → USDC (fee 100) · USDm → USDC (fee 100): stablecoin collateral (~$1).
+ */
+export interface CollateralOption {
+  /** Collateral token symbol — picker label + "Supply {symbol}". */
+  symbol: string;
+  collateralAddr: Address;
+  collateralDecimals: number;
+  /** Debt token symbol — "Borrow {debtSymbol}". */
+  debtSymbol: string;
+  debtAddr: Address;
+  debtDecimals: number;
+  /** Uniswap V3 fee tier of the collateral→debt pool the rescue swaps through. */
+  poolFee: number;
+  /** Sensible default wizard amounts (asset-scaled — WETH ≠ the stables). */
+  defaultSupply: string;
+  defaultBorrow: string;
+}
+
+export const COLLATERAL_OPTIONS: readonly CollateralOption[] = [
+  {
+    symbol: "WETH",
+    collateralAddr: TOKENS.WETH,
+    collateralDecimals: 18,
+    debtSymbol: "USDT",
+    debtAddr: TOKENS.USDT,
+    debtDecimals: DEBT_DECIMALS,
+    poolFee: 3000,
+    defaultSupply: "0.02",
+    defaultBorrow: "20",
+  },
+  {
+    symbol: "USDT",
+    collateralAddr: TOKENS.USDT,
+    collateralDecimals: 6,
+    debtSymbol: "USDC",
+    debtAddr: TOKENS.USDC,
+    debtDecimals: DEBT_DECIMALS,
+    poolFee: 100,
+    defaultSupply: "15",
+    defaultBorrow: "8",
+  },
+  {
+    symbol: "USDm",
+    collateralAddr: TOKENS.USDm,
+    collateralDecimals: 18,
+    debtSymbol: "USDC",
+    debtAddr: TOKENS.USDC,
+    debtDecimals: DEBT_DECIMALS,
+    poolFee: 100,
+    defaultSupply: "15",
+    defaultBorrow: "8",
+  },
+];
+
+/** The default collateral (WETH — the volatile-collateral headline demo). */
+export const DEFAULT_COLLATERAL: CollateralOption = COLLATERAL_OPTIONS[0];
+
+/** Resolve a collateral option by symbol (e.g. from a live vault's terms),
+ *  falling back to the default when unknown. */
+export function collateralOptionBySymbol(symbol: string): CollateralOption {
+  return (
+    COLLATERAL_OPTIONS.find((o) => o.symbol === symbol) ?? DEFAULT_COLLATERAL
+  );
+}
 
 /* ── Structural client types (viem clients satisfy these; fakes can too) ──
    `any`-typed params are deliberate: viem's `readContract`/`writeContract` are
@@ -167,7 +241,7 @@ export async function createVaultTx(
     args: [
       p.collateralAsset,
       p.debtAsset,
-      p.poolFee ?? VAULT_DEFAULTS.poolFee,
+      p.poolFee ?? DEFAULT_COLLATERAL.poolFee,
       p.operator,
       p.feeRecipient,
       p.feeBps ?? VAULT_DEFAULTS.feeBps,
@@ -266,6 +340,8 @@ export interface RunFundingParams {
   feeRecipient: Address;
   collateralAsset: Address;
   debtAsset: Address;
+  /** Uniswap V3 fee tier of the collateral→debt pool (from the chosen option). */
+  poolFee?: number;
   /** Existing vault (resume) or null to create one. */
   existingVault: Address | null;
   supplyAmount: bigint;
@@ -292,6 +368,7 @@ export async function runFunding(
       factory: p.factory,
       collateralAsset: p.collateralAsset,
       debtAsset: p.debtAsset,
+      poolFee: p.poolFee,
       operator: p.operator,
       feeRecipient: p.feeRecipient,
     });

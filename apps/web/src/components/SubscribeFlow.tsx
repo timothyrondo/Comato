@@ -17,7 +17,6 @@ import { parseUnits } from "viem";
 import { useWallet, type WalletState } from "../data/wallet";
 import { useVault, type VaultView } from "../data/useVault";
 import { subscribeConfig } from "../lib/env";
-import { TOKENS } from "../lib/constants";
 import {
   getWalletClient,
   getWalletPublicClient,
@@ -25,7 +24,11 @@ import {
 import {
   borrowTx,
   runFunding,
-  VAULT_DEFAULTS,
+  COLLATERAL_OPTIONS,
+  DEFAULT_COLLATERAL,
+  DEBT_DECIMALS,
+  collateralOptionBySymbol,
+  type CollateralOption,
   type StepId,
   type StepStatus,
 } from "../lib/vault";
@@ -166,9 +169,9 @@ function ConnectBody({ wallet }: { wallet: WalletState }) {
   return (
     <div className="space-y-3">
       <p className="text-[13px] leading-relaxed text-ink-soft">
-        Connect your wallet to create a non-custodial Comato vault, supply USDT,
-        and borrow USDC — all from the browser. Comato then monitors it and steps
-        in before liquidation.
+        Connect your wallet to create a non-custodial Comato vault, supply
+        collateral, and borrow against it — all from the browser. Comato then
+        monitors it and steps in before liquidation.
       </p>
       <PillButton
         onClick={wallet.connect}
@@ -220,11 +223,75 @@ function NotConfiguredBody() {
 
 /* ── Wizard (create → supply → borrow) ──────────────────── */
 
-const STEP_LABELS: Record<StepId, string> = {
-  create: "Create your Comato vault",
-  supply: "Approve & supply USDT",
-  borrow: "Borrow USDC",
-};
+/** Step labels track the chosen collateral (Supply {SYMBOL}) + its debt asset. */
+function stepLabels(c: CollateralOption): Record<StepId, string> {
+  return {
+    create: "Create your Comato vault",
+    supply: `Approve & supply ${c.symbol}`,
+    borrow: `Borrow ${c.debtSymbol}`,
+  };
+}
+
+/* Segmented on-brand collateral toggle (only shown while creating a vault). */
+function CollateralPicker({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: CollateralOption;
+  onChange: (o: CollateralOption) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div>
+      <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-ink-muted">
+        Collateral asset
+      </span>
+      <div
+        role="radiogroup"
+        aria-label="Collateral asset"
+        className="glass-soft mt-1.5 grid grid-cols-3 gap-1 rounded-tile p-1"
+      >
+        {COLLATERAL_OPTIONS.map((opt) => {
+          const active = opt.symbol === value.symbol;
+          return (
+            <motion.button
+              key={opt.symbol}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              aria-label={`${opt.symbol} collateral`}
+              disabled={disabled}
+              onClick={() => onChange(opt)}
+              whileTap={disabled ? undefined : { scale: 0.97 }}
+              className="relative flex items-center justify-center rounded-2xl px-3 py-2 text-[13px] font-semibold transition-colors disabled:opacity-60"
+            >
+              {active && (
+                <motion.span
+                  layoutId="collateral-active"
+                  transition={{ type: "spring", stiffness: 480, damping: 34 }}
+                  className="absolute inset-0 rounded-2xl bg-accent-soft"
+                />
+              )}
+              <span
+                className={
+                  "relative z-10 " +
+                  (active ? "text-accent-ink" : "text-ink-soft")
+                }
+              >
+                {opt.symbol}
+              </span>
+            </motion.button>
+          );
+        })}
+      </div>
+      <p className="mt-1.5 text-[11.5px] leading-relaxed text-ink-muted">
+        Supply {value.symbol}, borrow {value.debtSymbol}. Comato deleverages by
+        swapping {value.symbol}→{value.debtSymbol} before liquidation.
+      </p>
+    </div>
+  );
+}
 
 function StepDot({ status }: { status: StepStatus }) {
   const map: Record<StepStatus, string> = {
@@ -260,8 +327,21 @@ function WizardBody({
   wallet: WalletState;
   vault: VaultView;
 }) {
-  const [supplyAmount, setSupplyAmount] = useState("15");
-  const [borrowAmount, setBorrowAmount] = useState("8");
+  const needCreate = vault.fundingStage === "none";
+  // While creating, the user picks the collateral; once the vault exists its
+  // collateral is fixed at creation, so resolve it from the vault's terms.
+  const vaultCollateral = collateralOptionBySymbol(vault.collateralAsset);
+  const initialCollateral = needCreate ? DEFAULT_COLLATERAL : vaultCollateral;
+
+  const [selected, setSelected] = useState<CollateralOption>(initialCollateral);
+  const collateral = needCreate ? selected : vaultCollateral;
+
+  const [supplyAmount, setSupplyAmount] = useState(
+    initialCollateral.defaultSupply,
+  );
+  const [borrowAmount, setBorrowAmount] = useState(
+    initialCollateral.defaultBorrow,
+  );
   const [steps, setSteps] = useState<Record<StepId, StepStatus>>(() =>
     initialSteps(vault.fundingStage),
   );
@@ -274,8 +354,15 @@ function WizardBody({
     if (!running) setSteps(initialSteps(vault.fundingStage));
   }, [vault.fundingStage, running]);
 
+  // Switching collateral reseeds the amounts (0.02 WETH ≠ 15 USDT).
+  function pickCollateral(opt: CollateralOption) {
+    setSelected(opt);
+    setSupplyAmount(opt.defaultSupply);
+    setBorrowAmount(opt.defaultBorrow);
+  }
+
+  const labels = stepLabels(collateral);
   const operatorMissing = !subscribeConfig.operatorAddr;
-  const needCreate = vault.fundingStage === "none";
   const amountsValid =
     (steps.supply !== "done" ? isPositiveAmount(supplyAmount) : true) &&
     isPositiveAmount(borrowAmount);
@@ -300,11 +387,12 @@ function WizardBody({
         operator: subscribeConfig.operatorAddr ?? wallet.account,
         feeRecipient:
           subscribeConfig.feeRecipient ?? subscribeConfig.operatorAddr ?? wallet.account,
-        collateralAsset: TOKENS.USDT,
-        debtAsset: TOKENS.USDC,
+        collateralAsset: collateral.collateralAddr,
+        debtAsset: collateral.debtAddr,
+        poolFee: collateral.poolFee,
         existingVault: vault.vault,
-        supplyAmount: parseUnits(supplyAmount, VAULT_DEFAULTS.collateralDecimals),
-        borrowAmount: parseUnits(borrowAmount, VAULT_DEFAULTS.debtDecimals),
+        supplyAmount: parseUnits(supplyAmount, collateral.collateralDecimals),
+        borrowAmount: parseUnits(borrowAmount, collateral.debtDecimals),
         need,
         onStep: (id, status, stepNote) => {
           setSteps((s) => ({ ...s, [id]: status }));
@@ -330,15 +418,24 @@ function WizardBody({
   return (
     <div className="space-y-4">
       <p className="text-[13px] leading-relaxed text-ink-soft">
-        Supply USDT collateral and borrow USDC against it. Comato watches the
-        resulting Health Factor and deleverages before liquidation.
+        Supply {collateral.symbol} collateral and borrow {collateral.debtSymbol}{" "}
+        against it. Comato watches the resulting Health Factor and deleverages
+        before liquidation.
       </p>
+
+      {needCreate && (
+        <CollateralPicker
+          value={selected}
+          onChange={pickCollateral}
+          disabled={running}
+        />
+      )}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {steps.supply !== "done" && (
           <AmountField
             label="Supply collateral"
-            token="USDT"
+            token={collateral.symbol}
             value={supplyAmount}
             onChange={setSupplyAmount}
             disabled={running}
@@ -346,7 +443,7 @@ function WizardBody({
         )}
         <AmountField
           label="Borrow"
-          token="USDC"
+          token={collateral.debtSymbol}
           value={borrowAmount}
           onChange={setBorrowAmount}
           disabled={running}
@@ -367,7 +464,7 @@ function WizardBody({
                     : "text-ink-soft")
               }
             >
-              {STEP_LABELS[id]}
+              {labels[id]}
               {steps[id] === "active" && note && (
                 <span className="ml-1.5 font-normal text-accent-ink">· {note}…</span>
               )}
@@ -423,7 +520,7 @@ function LiveVaultBody({
         getWalletPublicClient(),
         wallet.account,
         vault.vault,
-        parseUnits(bmAmount, VAULT_DEFAULTS.debtDecimals),
+        parseUnits(bmAmount, DEBT_DECIMALS),
       );
       vault.refresh();
     } catch (err) {
@@ -499,7 +596,7 @@ function LiveVaultBody({
       {/* Drive HF down on camera */}
       <div className="glass-soft rounded-tile p-4">
         <div className="mb-2 text-[12.5px] font-semibold text-ink">
-          Borrow more USDC
+          Borrow more {vault.debtAsset}
           <span className="ml-1.5 font-normal text-ink-muted">
             — pushes Health Factor down to trigger a rescue
           </span>
@@ -508,7 +605,7 @@ function LiveVaultBody({
           <div className="flex-1">
             <AmountField
               label="Amount"
-              token="USDC"
+              token={vault.debtAsset}
               value={bmAmount}
               onChange={setBmAmount}
               disabled={bmBusy}

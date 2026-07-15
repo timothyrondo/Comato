@@ -3,6 +3,9 @@ import { parseEther, parseUnits } from "viem";
 import {
   ZERO_ADDRESS,
   VAULT_DEFAULTS,
+  COLLATERAL_OPTIONS,
+  DEFAULT_COLLATERAL,
+  collateralOptionBySymbol,
   readVaultOf,
   readVaultPosition,
   readVaultTerms,
@@ -134,7 +137,7 @@ describe("writes construct the correct call + await a receipt", () => {
     expect(call.args).toEqual([
       TOKENS.CELO,
       TOKENS.USDC,
-      VAULT_DEFAULTS.poolFee,
+      DEFAULT_COLLATERAL.poolFee, // poolFee falls back to the default option (WETH → 3000)
       ACCOUNT,
       ACCOUNT,
       VAULT_DEFAULTS.feeBps,
@@ -271,5 +274,88 @@ describe("runFunding", () => {
         need: { create: true, supply: true, borrow: true },
       }),
     ).rejects.toThrow("Vault address unavailable");
+  });
+});
+
+describe("collateral options drive createVault + supply", () => {
+  test("shape: WETH default (→USDT, fee 3000); USDT + USDm (→USDC, fee 100)", () => {
+    expect(DEFAULT_COLLATERAL).toBe(COLLATERAL_OPTIONS[0]);
+
+    const weth = COLLATERAL_OPTIONS[0];
+    expect(weth.symbol).toBe("WETH");
+    expect(weth.collateralAddr).toBe(TOKENS.WETH);
+    expect(weth.collateralDecimals).toBe(18);
+    expect(weth.debtSymbol).toBe("USDT");
+    expect(weth.debtAddr).toBe(TOKENS.USDT);
+    expect(weth.debtDecimals).toBe(6);
+    expect(weth.poolFee).toBe(3000);
+
+    const usdt = COLLATERAL_OPTIONS[1];
+    expect(usdt.symbol).toBe("USDT");
+    expect(usdt.collateralAddr).toBe(TOKENS.USDT);
+    expect(usdt.collateralDecimals).toBe(6);
+    expect(usdt.debtAddr).toBe(TOKENS.USDC);
+    expect(usdt.poolFee).toBe(100);
+
+    const usdm = COLLATERAL_OPTIONS[2];
+    expect(usdm.symbol).toBe("USDm");
+    expect(usdm.collateralAddr).toBe(TOKENS.USDm);
+    expect(usdm.collateralDecimals).toBe(18);
+    expect(usdm.debtAddr).toBe(TOKENS.USDC);
+    expect(usdm.poolFee).toBe(100);
+  });
+
+  test("collateralOptionBySymbol resolves known symbols, else the default", () => {
+    expect(collateralOptionBySymbol("USDm")).toBe(COLLATERAL_OPTIONS[2]);
+    expect(collateralOptionBySymbol("WETH")).toBe(COLLATERAL_OPTIONS[0]);
+    expect(collateralOptionBySymbol("CELO")).toBe(DEFAULT_COLLATERAL); // unknown → default
+  });
+
+  // The core of the "dynamic collateral" change: the picked option must change
+  // the collateral address + decimals + poolFee that reach createVault/supply.
+  async function runWith(opt: typeof COLLATERAL_OPTIONS[number]) {
+    const { wallet, calls } = fakeWallet();
+    const { client } = fakePublic((fn) => {
+      if (fn === "vaultOf") return VAULT;
+      if (fn === "allowance") return 0n;
+      return 0n;
+    });
+    await runFunding({
+      wallet,
+      publicClient: client,
+      account: ACCOUNT,
+      factory: FACTORY,
+      operator: ACCOUNT,
+      feeRecipient: ACCOUNT,
+      collateralAsset: opt.collateralAddr,
+      debtAsset: opt.debtAddr,
+      poolFee: opt.poolFee,
+      existingVault: null,
+      supplyAmount: parseUnits(opt.defaultSupply, opt.collateralDecimals),
+      borrowAmount: parseUnits(opt.defaultBorrow, opt.debtDecimals),
+      need: { create: true, supply: true, borrow: true },
+    });
+    return calls;
+  }
+
+  test("selecting USDm → USDm/USDC + fee 100 + 18-decimal supply amount", async () => {
+    const calls = await runWith(collateralOptionBySymbol("USDm"));
+    const create = calls.find((c) => c.functionName === "createVault");
+    // createVault args: [collateral, debt, poolFee, operator, feeRecipient, feeBps, hf, target]
+    expect(create?.args?.[0]).toBe(TOKENS.USDm);
+    expect(create?.args?.[1]).toBe(TOKENS.USDC);
+    expect(create?.args?.[2]).toBe(100);
+    const supply = calls.find((c) => c.functionName === "supply");
+    expect(supply?.args?.[0]).toBe(parseUnits("15", 18));
+  });
+
+  test("selecting WETH (default) → WETH/USDT + fee 3000 + 18-decimal supply amount", async () => {
+    const calls = await runWith(DEFAULT_COLLATERAL);
+    const create = calls.find((c) => c.functionName === "createVault");
+    expect(create?.args?.[0]).toBe(TOKENS.WETH);
+    expect(create?.args?.[1]).toBe(TOKENS.USDT);
+    expect(create?.args?.[2]).toBe(3000);
+    const supply = calls.find((c) => c.functionName === "supply");
+    expect(supply?.args?.[0]).toBe(parseUnits("0.02", 18));
   });
 });

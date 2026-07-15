@@ -121,7 +121,7 @@ describe("SubscribeFlowView — wallet gate", () => {
 });
 
 describe("SubscribeFlowView — wizard (no vault yet)", () => {
-  test("renders the three funding steps + primary CTA", () => {
+  test("renders the three funding steps + primary CTA (defaults to WETH → USDT)", () => {
     const { getByText, getByLabelText } = render(
       <SubscribeFlowView
         wallet={wallet()}
@@ -129,10 +129,48 @@ describe("SubscribeFlowView — wizard (no vault yet)", () => {
       />,
     );
     expect(getByText("Create your Comato vault")).toBeDefined();
-    expect(getByText("Approve & supply USDT")).toBeDefined();
-    expect(getByText("Borrow USDC")).toBeDefined();
+    expect(getByText("Approve & supply WETH")).toBeDefined();
+    expect(getByText("Borrow USDT")).toBeDefined();
     expect(getByLabelText("Supply collateral")).toBeDefined();
     expect(getByText("Protect a position")).toBeDefined();
+  });
+
+  test("collateral picker: defaults to WETH, selecting USDm rewires the copy", () => {
+    const { getByText, queryByText } = render(
+      <SubscribeFlowView
+        wallet={wallet()}
+        vault={vault({ fundingStage: "none", vault: null, hasVault: false, debtUsd: 0, collateralUsd: 0 })}
+      />,
+    );
+    // Default headline collateral is WETH (borrows USDT).
+    expect(getByText("Approve & supply WETH")).toBeDefined();
+    expect(getByText("Borrow USDT")).toBeDefined();
+
+    // Pick the USDm option → collateral + debt copy both change (USDm → USDC).
+    fireEvent.click(getByText("USDm"));
+    expect(getByText("Approve & supply USDm")).toBeDefined();
+    expect(getByText("Borrow USDC")).toBeDefined();
+    expect(queryByText("Approve & supply WETH")).toBeNull();
+  });
+
+  test("collateral picker is hidden once a vault exists (collateral fixed at creation)", () => {
+    // Vault created (awaiting collateral) with USDT terms → no picker, USDT copy.
+    const { getByText, queryByText } = render(
+      <SubscribeFlowView
+        wallet={wallet()}
+        vault={vault({
+          fundingStage: "awaiting-collateral",
+          collateralAsset: "USDT",
+          debtAsset: "USDC",
+          debtUsd: 0,
+          collateralUsd: 0,
+        })}
+      />,
+    );
+    expect(getByText("Approve & supply USDT")).toBeDefined();
+    expect(getByText("Borrow USDC")).toBeDefined();
+    // The WETH option button is absent because the picker isn't rendered.
+    expect(queryByText("WETH")).toBeNull();
   });
 
   test("clicking Protect a position with no wallet surfaces the error", async () => {
