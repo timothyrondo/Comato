@@ -7,8 +7,8 @@ describe("AccountScreen", () => {
   test("renders the profile, wallet and settings rows", () => {
     const { getByText } = renderWithData(<AccountScreen />);
     expect(getByText("Account")).toBeDefined();
-    expect(getByText("Timo")).toBeDefined();
-    expect(getByText("@timothyrondo")).toBeDefined();
+    // fake user identity replaced by the product identity
+    expect(getByText("Comato protection")).toBeDefined();
     // wallet chip
     expect(getByText("0x71C2…9a2E")).toBeDefined();
     // settings rows

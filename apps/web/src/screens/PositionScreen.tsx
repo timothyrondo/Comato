@@ -91,7 +91,7 @@ export default function PositionScreen({
         <div className="mt-2 flex items-start justify-around border-t border-line pt-4">
           <LegendDot color="#e0524e" label="Critical" range="< 1.20" />
           <LegendDot color="#e0912f" label="Caution" range="1.20–1.50" />
-          <LegendDot color="#2a9d6f" label="Safe" range="> 1.50" />
+          <LegendDot color="#d9702a" label="Safe" range="> 1.50" />
         </div>
         <p className="mt-3 text-center text-[12px] leading-snug text-ink-muted">
           The dark line marks{" "}

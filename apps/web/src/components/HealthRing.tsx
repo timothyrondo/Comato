@@ -14,7 +14,7 @@ const START = -135; // lower-left
 const SWEEP = 270; // clockwise, gap at the bottom
 
 const RISK_HEX: Record<RiskLevel, string> = {
-  safe: "#2a9d6f",
+  safe: "#d9702a", // warm brand orange (no green)
   warn: "#e0912f",
   danger: "#e0524e",
 };

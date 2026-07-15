@@ -22,7 +22,7 @@ export default function HomeScreen({
 }: {
   onNavigate: (s: Screen) => void;
 }) {
-  const { user, position, activity, isLive } = useComatoData();
+  const { user, position, activity } = useComatoData();
   const level = riskLevel(
     position.healthFactor,
     position.rescueHf,
@@ -91,15 +91,6 @@ export default function HomeScreen({
             Your position is safe from liquidation. The Comato agent watches it
             every {position.monitorIntervalSec} seconds, non-stop.
           </p>
-
-          <div className="mt-5 flex items-center gap-4 text-[12px] text-ink-muted">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-              Checked {position.lastCheckSec}s ago
-            </span>
-            <span className="h-3 w-px bg-line" />
-            <span className="tnum">Uptime {position.uptimePct}%</span>
-          </div>
         </div>
       </motion.section>
 
@@ -116,12 +107,6 @@ export default function HomeScreen({
           label="Health Factor"
           value={<HfCount value={position.healthFactor} />}
           sub={`${riskCopy[level]} · above liquidation threshold ${position.liquidationHf.toFixed(2)}`}
-          badge={
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/18 px-2.5 py-1 text-[11px] font-semibold text-accent-ink">
-              <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-accent-bright" />
-              {isLive ? "Live" : "Demo"}
-            </span>
-          }
         />
         <StatTile
           label="Premium / hr"

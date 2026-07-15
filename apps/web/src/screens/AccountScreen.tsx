@@ -2,7 +2,6 @@ import type { ComponentType, SVGProps } from "react";
 import { useComatoData } from "../data/context";
 import { money } from "../lib/format";
 import { motion, fadeRise, staggerContainer, tapPress } from "../lib/motion";
-import Avatar from "../components/Avatar";
 import {
   ShieldCheck,
   Coins,
@@ -45,10 +44,14 @@ export default function AccountScreen() {
         className="glass-deep mt-4 rounded-card p-5 text-on-dark"
       >
         <div className="flex items-center gap-4">
-          <Avatar name={user.name} size={56} ring={false} />
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-accent/20 text-accent-ink shadow-[0_0_24px_-6px_rgba(241,137,60,0.7)]">
+            <ShieldCheck size={24} />
+          </span>
           <div className="min-w-0">
-            <div className="text-[18px] font-bold">{user.name}</div>
-            <div className="text-[13px] text-on-dark-muted">@{user.handle}</div>
+            <div className="text-[18px] font-bold">Comato protection</div>
+            <div className="text-[13px] text-on-dark-muted">
+              Gasless rescue insurance on Celo
+            </div>
           </div>
         </div>
         <div className="glass-chip mt-4 flex items-center justify-between rounded-tile px-4 py-3">

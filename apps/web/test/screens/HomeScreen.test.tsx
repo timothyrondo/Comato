@@ -4,15 +4,13 @@ import HomeScreen from "../../src/screens/HomeScreen";
 import { renderWithData } from "../helpers";
 import type { Screen } from "../../src/types";
 
-describe("HomeScreen (mock data, Demo badge)", () => {
+describe("HomeScreen (mock data)", () => {
   test("greets the user and shows the protected hero + key stats", () => {
     const { getByText } = renderWithData(<HomeScreen onNavigate={() => {}} />);
     expect(getByText("Hi, Timo")).toBeDefined();
     expect(getByText("Protected")).toBeDefined();
     // HF count-up snaps to the mock value
     expect(getByText("1.82")).toBeDefined();
-    // absent live env → Demo badge
-    expect(getByText("Demo")).toBeDefined();
     // premium + collateral tiles
     expect(getByText("$0.02")).toBeDefined();
     expect(getByText("$12,480")).toBeDefined();

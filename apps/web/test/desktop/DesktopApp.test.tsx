@@ -9,17 +9,15 @@ function renderDesktop(screen: Screen, onNavigate: (s: Screen) => void = () => {
 }
 
 describe("DesktopApp shell", () => {
-  test("sidebar brand + nav render, Demo badge shown (mock mode)", () => {
-    const { getByText, getByRole, getAllByText } = renderDesktop("home");
+  test("sidebar brand + nav render (mock mode)", () => {
+    const { getByText, getByRole } = renderDesktop("home");
     expect(getByText("Comato")).toBeDefined();
     expect(getByText("Rescue insurance")).toBeDefined();
     // nav buttons (labels also appear as panel titles → target the button role)
     expect(getByRole("button", { name: "Overview" })).toBeDefined();
     expect(getByRole("button", { name: "Positions" })).toBeDefined();
-    // live/demo badge
-    expect(getByText("Demo")).toBeDefined();
-    // sidebar user identity
-    expect(getAllByText("Timo").length).toBeGreaterThanOrEqual(1);
+    // sidebar footer status card (the fake user card was removed)
+    expect(getByText("Monitored non-stop")).toBeDefined();
   });
 
   test("sidebar navigation calls onNavigate with the screen id", () => {
@@ -44,12 +42,11 @@ describe("DesktopApp views", () => {
     expect(getByText("All clear")).toBeDefined();
   });
 
-  test("Overview: Protect position button + Open position link navigate", () => {
+  test("Overview: Open position link navigates", () => {
     const seen: Screen[] = [];
     const { getByText } = renderDesktop("home", (s) => seen.push(s));
-    fireEvent.click(getByText("Protect position"));
     fireEvent.click(getByText("Open"));
-    expect(seen).toEqual(["position", "position"]);
+    expect(seen).toEqual(["position"]);
   });
 
   test("Positions view: thresholds + rescue plan", () => {
@@ -68,16 +65,19 @@ describe("DesktopApp views", () => {
   });
 
   test("Settings view: profile + rows", () => {
-    const { getByText, getAllByText } = renderDesktop("account");
-    expect(getAllByText("Timo").length).toBeGreaterThanOrEqual(1);
+    const { getByText } = renderDesktop("account");
+    expect(getByText("Comato protection")).toBeDefined();
     expect(getByText("Security & vouchers")).toBeDefined();
     expect(getByText("EIP-3009")).toBeDefined();
   });
 
-  test("top bar refresh + notifications buttons are wired (no crash)", () => {
-    const { getByLabelText } = renderDesktop("home");
+  test("top bar: refresh wired, no notification bell, wallet-connect button present", () => {
+    const { getByLabelText, queryByLabelText, getByText } = renderDesktop("home");
     fireEvent.click(getByLabelText("Refresh data"));
-    fireEvent.click(getByLabelText("Notifications"));
     expect(getByLabelText("Refresh data")).toBeDefined();
+    // notification bell removed
+    expect(queryByLabelText("Notifications")).toBeNull();
+    // the top-right button is now the primary wallet-connect action
+    expect(getByText("Connect wallet")).toBeDefined();
   });
 });

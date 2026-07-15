@@ -1,6 +1,7 @@
 import { useState, type ComponentType, type ReactNode, type SVGProps } from "react";
 import type { Screen } from "../types";
 import { useComatoData } from "../data/context";
+import { useWallet } from "../data/wallet";
 import { type ActivityItem } from "../data/fixtures";
 import { money, percent, riskLevel, riskCopy, type RiskLevel } from "../lib/format";
 import {
@@ -21,7 +22,6 @@ import StatTile from "../components/StatTile";
 import ActivityCard from "../components/ActivityCard";
 import RescueTimeline from "../components/RescueTimeline";
 import PulseLine from "../components/PulseLine";
-import Avatar from "../components/Avatar";
 import SubscribeFlow from "../components/SubscribeFlow";
 import {
   ShieldCheck,
@@ -35,7 +35,7 @@ import {
   Lock,
   Wallet,
   AlertTriangle,
-  Bell,
+  Bolt,
 } from "../components/icons";
 
 type IconType = ComponentType<SVGProps<SVGSVGElement> & { size?: number }>;
@@ -63,15 +63,6 @@ function Panel({
   );
 }
 
-function LiveBadge({ isLive }: { isLive: boolean }) {
-  return (
-    <span className="glass-chip inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-semibold text-accent-ink">
-      <span className="pulse-dot h-2 w-2 rounded-full bg-accent-bright" />
-      {isLive ? "Live · on-chain" : "Demo"}
-    </span>
-  );
-}
-
 const STATUS: Record<RiskLevel, string> = {
   safe: "bg-accent-soft text-accent-ink",
   warn: "bg-warn/15 text-warn",
@@ -89,7 +80,7 @@ function StatusPill({ level }: { level: RiskLevel }) {
         className="pulse-dot h-1.5 w-1.5 rounded-full"
         style={{
           background:
-            level === "safe" ? "#2a9d6f" : level === "warn" ? "#e0912f" : "#e0524e",
+            level === "safe" ? "#d9702a" : level === "warn" ? "#e0912f" : "#e0524e",
         }}
       />
       {riskCopy[level]}
@@ -113,13 +104,12 @@ function Sidebar({
   screen: Screen;
   onNavigate: (s: Screen) => void;
 }) {
-  const { user, isLive } = useComatoData();
   return (
     <motion.aside
       variants={staggerContainer(0.08, 0.06)}
       initial="hidden"
       animate="visible"
-      className="glass sticky top-6 hidden h-[calc(100dvh-3rem)] w-[248px] shrink-0 flex-col rounded-panel p-5 lg:flex"
+      className="glass sticky! top-6 hidden h-[calc(100dvh-3rem)] w-[248px] shrink-0 flex-col self-start rounded-panel p-5 lg:flex"
     >
       {/* Brand */}
       <motion.div variants={fadeRise} className="flex items-center gap-3 px-1">
@@ -187,26 +177,13 @@ function Sidebar({
         })}
       </motion.nav>
 
-      <motion.div variants={fadeRise} className="mt-auto space-y-3">
+      <motion.div variants={fadeRise} className="mt-auto">
         <div className="glass-accent flex items-center gap-2.5 rounded-2xl px-3.5 py-3">
           <PulseLine className="h-6 w-10 shrink-0 text-accent-bright/70" strokeWidth={2} />
           <div className="min-w-0">
             <div className="text-[12.5px] font-semibold text-ink">Protection active</div>
             <div className="text-[11px] text-ink-soft">Monitored non-stop</div>
           </div>
-        </div>
-
-        {/* User */}
-        <div className="glass-chip flex items-center gap-3 rounded-2xl p-2.5">
-          <Avatar name={user.name} size={40} ring={false} />
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[13.5px] font-bold text-ink">{user.name}</div>
-            <div className="truncate text-[11px] text-ink-muted">@{user.handle}</div>
-          </div>
-          <span
-            className="h-2 w-2 shrink-0 rounded-full bg-accent-bright shadow-[0_0_8px_2px_rgba(255,168,90,0.7)]"
-            title={isLive ? "Live" : "Demo"}
-          />
         </div>
       </motion.div>
     </motion.aside>
@@ -222,14 +199,63 @@ const TITLES: Record<Screen, { title: string; sub: string }> = {
   account: { title: "Settings", sub: "Account, premium method & security." },
 };
 
-function TopBar({
-  screen,
-  onNavigate,
-}: {
-  screen: Screen;
-  onNavigate: (s: Screen) => void;
-}) {
-  const { isLive, refresh } = useComatoData();
+function shortAddress(a: string): string {
+  return `${a.slice(0, 6)}…${a.slice(-4)}`;
+}
+
+/**
+ * Primary wallet-connect action (top-right). Wired to `useWallet()`:
+ * disconnected → "Connect wallet" (connect); connected on the wrong network →
+ * "Switch to Celo" (switchChain); connected on Celo → the short account address.
+ */
+function WalletButton() {
+  const wallet = useWallet();
+  const connecting = wallet.status === "connecting";
+
+  if (wallet.status === "connected" && wallet.isCelo && wallet.account) {
+    const addr = wallet.account;
+    return (
+      <span className="glass-chip inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-[13.5px] font-semibold text-accent-ink">
+        <span className="h-2 w-2 rounded-full bg-accent-bright shadow-[0_0_8px_2px_rgba(255,168,90,0.7)]" />
+        <span className="tnum">{shortAddress(addr)}</span>
+      </span>
+    );
+  }
+
+  const wrongChain = wallet.status === "connected" && !wallet.isCelo;
+  const onClick = wrongChain ? wallet.switchChain : wallet.connect;
+  const label = connecting
+    ? "Connecting…"
+    : wrongChain
+      ? "Switch to Celo"
+      : "Connect wallet";
+
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      disabled={connecting}
+      whileHover={hoverPop}
+      whileTap={tapPress}
+      className="btn-primary inline-flex items-center gap-2 rounded-full px-5 py-3 text-[14px] font-semibold transition-colors disabled:opacity-70"
+    >
+      {connecting ? (
+        <span
+          className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+          aria-hidden
+        />
+      ) : wrongChain ? (
+        <Bolt size={18} />
+      ) : (
+        <Wallet size={18} />
+      )}
+      {label}
+    </motion.button>
+  );
+}
+
+function TopBar({ screen }: { screen: Screen }) {
+  const { refresh } = useComatoData();
   const { title, sub } = TITLES[screen];
   return (
     <header className="flex flex-wrap items-center justify-between gap-4">
@@ -240,7 +266,6 @@ function TopBar({
         <p className="mt-1 text-[13.5px] text-ink-soft">{sub}</p>
       </div>
       <div className="flex items-center gap-2.5">
-        <LiveBadge isLive={isLive} />
         <motion.button
           type="button"
           onClick={refresh}
@@ -251,32 +276,7 @@ function TopBar({
         >
           <Refresh size={19} />
         </motion.button>
-        <motion.button
-          type="button"
-          whileHover={{ scale: 1.06 }}
-          whileTap={tapPress}
-          aria-label="Notifications"
-          className="glass-soft flex h-11 w-11 items-center justify-center rounded-full text-ink-soft transition-colors hover:text-ink"
-        >
-          <Bell size={19} />
-        </motion.button>
-        <AnimatePresence>
-          {screen === "home" && (
-            <motion.button
-              type="button"
-              onClick={() => onNavigate("position")}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              whileHover={hoverPop}
-              whileTap={tapPress}
-              className="btn-primary inline-flex items-center gap-2 rounded-full px-5 py-3 text-[14px] font-semibold transition-colors"
-            >
-              <ShieldCheck size={18} />
-              Protect position
-            </motion.button>
-          )}
-        </AnimatePresence>
+        <WalletButton />
       </div>
     </header>
   );
@@ -351,53 +351,24 @@ function HeroBanner() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.55, delay: 0.02, ease: EASE_OUT }}
     >
-      <PulseLine
-        className="pointer-events-none absolute inset-x-0 bottom-5 h-16 w-full text-accent-bright/30"
-        animate
-        strokeWidth={2}
-      />
-      <div className="relative flex flex-wrap items-end justify-between gap-6">
-        <div className="min-w-0">
-          <span className="glass-chip inline-flex items-center gap-2 rounded-full px-3 py-1 text-[12px] font-semibold text-accent-ink">
-            <span className="pulse-dot h-2 w-2 rounded-full bg-accent-bright" />
-            Protection active
+      <div className="relative min-w-0">
+        <span className="glass-chip inline-flex items-center gap-2 rounded-full px-3 py-1 text-[12px] font-semibold text-accent-ink">
+          <span className="pulse-dot h-2 w-2 rounded-full bg-accent-bright" />
+          Protection active
+        </span>
+        <div className="mt-4 flex items-center gap-3.5">
+          <h2 className="font-display text-[3.4rem] font-extrabold leading-none tracking-tight text-ink">
+            Protected
+          </h2>
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-b from-accent-bright to-accent text-[#fff7ef] shadow-[0_0_26px_-4px_rgba(241,137,60,0.95)]">
+            <ShieldCheck size={24} />
           </span>
-          <div className="mt-4 flex items-center gap-3.5">
-            <h2 className="font-display text-[3.4rem] font-extrabold leading-none tracking-tight text-ink">
-              Protected
-            </h2>
-            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-b from-accent-bright to-accent text-[#fff7ef] shadow-[0_0_26px_-4px_rgba(241,137,60,0.95)]">
-              <ShieldCheck size={24} />
-            </span>
-          </div>
-          <p className="mt-3 max-w-[34rem] text-[14px] leading-relaxed text-ink-soft">
-            Your Aave V3 position is safe from liquidation. The Comato agent
-            watches it every {position.monitorIntervalSec} seconds and steps in
-            with a gasless rescue before your Health Factor ever reaches the line.
-          </p>
         </div>
-        <div className="flex items-center gap-6 text-[12.5px] text-ink-soft">
-          <div>
-            <div className="tnum font-display text-[22px] font-bold text-ink">
-              {position.lastCheckSec}s
-            </div>
-            <div className="text-ink-muted">Since last check</div>
-          </div>
-          <span className="h-9 w-px bg-ink/10" />
-          <div>
-            <div className="tnum font-display text-[22px] font-bold text-ink">
-              {position.uptimePct}%
-            </div>
-            <div className="text-ink-muted">Monitor uptime</div>
-          </div>
-          <span className="h-9 w-px bg-ink/10" />
-          <div>
-            <div className="tnum font-display text-[22px] font-bold text-ink">
-              {position.protectedSinceDays}d
-            </div>
-            <div className="text-ink-muted">Protected</div>
-          </div>
-        </div>
+        <p className="mt-3 max-w-[34rem] text-[14px] leading-relaxed text-ink-soft">
+          Your Aave V3 position is safe from liquidation. The Comato agent
+          watches it every {position.monitorIntervalSec} seconds and steps in
+          with a gasless rescue before your Health Factor ever reaches the line.
+        </p>
       </div>
     </motion.section>
   );
@@ -858,10 +829,14 @@ function SettingsView() {
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
       <Panel className="glass-deep p-6 text-on-dark" delay={40}>
         <div className="flex items-center gap-4">
-          <Avatar name={user.name} size={60} ring={false} />
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-accent/20 text-accent-ink shadow-[0_0_24px_-6px_rgba(241,137,60,0.7)]">
+            <ShieldCheck size={26} />
+          </span>
           <div className="min-w-0">
-            <div className="text-[20px] font-bold">{user.name}</div>
-            <div className="text-[13px] text-on-dark-muted">@{user.handle}</div>
+            <div className="text-[20px] font-bold">Comato protection</div>
+            <div className="text-[13px] text-on-dark-muted">
+              Gasless rescue insurance on Celo
+            </div>
           </div>
         </div>
         <div className="glass-chip mt-5 flex items-center gap-3 rounded-tile px-4 py-3.5">
@@ -914,7 +889,7 @@ export default function DesktopApp({
         {/* TopBar persists (anchors the view); only the view below cross-fades.
             Each view's panels replay their staggered entrance on switch. */}
         <main className="min-w-0 flex-1 space-y-6 pb-6">
-          <TopBar screen={screen} onNavigate={onNavigate} />
+          <TopBar screen={screen} />
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={screen}

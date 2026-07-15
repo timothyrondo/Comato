@@ -1,0 +1,10 @@
+{
+  "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+  "name": "Comato",
+  "description": "Non-custodial liquidation-protection agent on Celo. Comato monitors your Aave V3 health factor and, when it nears the liquidation line, auto-deleverages your own position (withdraw collateral → swap → repay) to lift it back to safety — using your own funds, never Comato's, for a capped service fee.",
+  "image": "https://comato.vercel.app/favicon.svg",
+  "services": [
+    { "name": "web", "endpoint": "https://comato.vercel.app" }
+  ],
+  "supportedTrust": ["reputation", "validation"]
+}

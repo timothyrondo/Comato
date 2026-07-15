@@ -47,7 +47,7 @@
   --color-accent-warm: #e09559;
 
   /* Risk semantics — warm-tuned, legible on light */
-  --color-safe: #2a9d6f; /* warm green-teal */
+  --color-safe: #d9702a; /* warm brand orange — safe / all-clear (no green) */
   --color-warn: #e0912f; /* warm amber */
   --color-danger: #e0524e; /* warm red */
 
