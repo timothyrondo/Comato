@@ -8,9 +8,9 @@ import {
 } from "../../src/data/fixtures";
 
 describe("fixture shapes", () => {
-  test("user is the Timo / timothyrondo identity", () => {
+  test("demo user carries a product handle, no personal identity", () => {
     expect(user.name).toBe("Timo");
-    expect(user.handle).toBe("timothyrondo");
+    expect(user.handle).toBe("comato");
     expect(user.walletShort).toMatch(/^0x/);
   });
 

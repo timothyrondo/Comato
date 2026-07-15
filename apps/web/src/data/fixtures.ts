@@ -18,7 +18,7 @@ export interface User {
 
 export const user: User = {
   name: "Timo",
-  handle: "timothyrondo",
+  handle: "comato",
   walletShort: "0x71C2…9a2E",
   contextLabel: "Aave V3 position · Celo",
 };
