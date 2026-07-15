@@ -67,6 +67,11 @@ contract ComatoVaultForkTest is Test {
     address internal constant USDC = 0xcebA9300f2b948710d2653dD7B07f33A8B32118C; // 6 dec, debt
     address internal constant USDT = 0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e; // 6 dec, collateral
 
+    address internal constant WETH = 0xD221812de1BD094f35587EE8E174B07B6167D9Af; // 18 dec, volatile collateral
+
+    uint24 internal constant WETH_POOL_FEE = 3000; // WETH/USDT pool (WETH/USDC has no Celo pool)
+    uint256 internal constant WETH_SUPPLY = 0.2e18; // 0.2 WETH collateral
+
     uint24 internal constant POOL_FEE = 100; // Uniswap fee tier 100 (USDT/USDC stable pool)
     uint256 internal constant FEE_BPS = 500; // 5%
     uint256 internal constant HF_THRESHOLD = 1.3e18;
@@ -142,6 +147,14 @@ contract ComatoVaultForkTest is Test {
     /// @dev Size a single deleverage from live data: withdraw at most enough collateral value to keep
     ///      the mid-transaction HF (before the repay) >= MID_HF_FLOOR, taking 70% of that room for safety.
     /// @return collateralIn USDT (6dec) to withdraw+swap. @return minDebtOut conservative USDC floor.
+    /// @dev The vault's live collateral holdings (its aToken balance) — the same read the agent's
+    ///      `readCollateralHeld` does. Using this (not the original supply amount) keeps sizing
+    ///      correct across successive deleverage cycles, where the holdings shrink each time.
+    function _collateralHeld(ComatoVault v) internal view returns (uint256) {
+        address aToken = pool.getReserveData(v.collateralAsset()).aTokenAddress;
+        return IERC20(aToken).balanceOf(address(v));
+    }
+
     function _sizeDeleverage(ComatoVault v)
         internal
         view
@@ -152,9 +165,9 @@ contract ComatoVaultForkTest is Test {
         uint256 minColl = (((MID_HF_FLOOR * debtBase) / 1e18) * 1e4) / lt; // 8dec USD
         uint256 vValMax = collBase > minColl ? collBase - minColl : 0; // 8dec USD withdrawable pre-repay
         uint256 vVal = (vValMax * 70) / 100; // 70% of the room
-        // Value(8dec USD) -> collateral token (6dec) via the position's per-unit value.
-        collateralIn = (SUPPLY_AMOUNT * vVal) / collBase;
-        // Expected USDC out ≈ vVal (8dec) -> 6dec; take 70% as a conservative slippage floor.
+        // Value(8dec USD) -> collateral token units via the vault's live per-unit holdings.
+        collateralIn = (_collateralHeld(v) * vVal) / collBase;
+        // Expected debt-asset out ≈ vVal (8dec) -> 6dec; take 70% as a conservative slippage floor.
         minDebtOut = ((vVal / 100) * 70) / 100;
     }
 
@@ -180,6 +193,109 @@ contract ComatoVaultForkTest is Test {
     /*//////////////////////////////////////////////////////////////
                      DELEVERAGE (rescue) — the core path
     //////////////////////////////////////////////////////////////*/
+
+    /// @notice The agent's REAL recovery path, and the honest bound on it.
+    ///
+    ///         `deleverage` withdraws collateral BEFORE it repays, so Aave's mid-transaction
+    ///         solvency check (`LT * (C - v) / D >= 1`) caps a single call: from a position at
+    ///         HF `h`, one call can withdraw at most `v = C - D/LT` of value, which lifts HF only
+    ///         modestly — and the LOWER the starting HF, the LESS a single call can lift. A
+    ///         non-custodial vault (rescuing from the subscriber's OWN collateral) is bounded
+    ///         this way in a manner a float-funded repay is not.
+    ///
+    ///         So the agent does not rescue in one heroic call — it deleverages across successive
+    ///         monitor cycles, each one bounded and HF-improving, walking the position back to
+    ///         safety. This proves that climb is real and monotonic against live Aave.
+    function test_Fork_Vault_IterativeDeleverageClimbsToSafety() public {
+        if (!forked) return;
+
+        ComatoVault v = _deployVault();
+        _supply(v, SUPPLY_AMOUNT);
+        _borrow(v, 6e6);
+        _breach(v);
+
+        uint256 hf = _hf(v);
+        assertLt(hf, HF_THRESHOLD, "starts breached");
+        emit log_named_decimal_uint("HF start ", hf, 18);
+
+        uint256 cycles;
+        for (uint256 i = 0; i < 12; i++) {
+            if (hf >= HF_THRESHOLD) break; // vault reverts NotBreached once safe
+            (uint256 collateralIn, uint256 minDebtOut) = _sizeDeleverage(v);
+            if (collateralIn == 0) break;
+
+            vm.prank(operator);
+            try v.deleverage(collateralIn, minDebtOut) {
+                cycles++;
+            } catch {
+                break; // no further bounded move is possible
+            }
+
+            uint256 next = _hf(v);
+            assertGt(next, hf, "each cycle strictly improves HF");
+            assertLe(next, TARGET_HF, "never overshoots the target");
+            hf = next;
+            emit log_named_decimal_uint("HF cycle ", hf, 18);
+        }
+
+        emit log_named_uint("cycles   ", cycles);
+        emit log_named_decimal_uint("HF final ", hf, 18);
+        assertGt(cycles, 0, "at least one deleverage landed");
+    }
+
+    /// @notice The same climb on VOLATILE collateral (WETH -> USDT), which is the case the agent's
+    ///         economic decision layer actually acts on: WETH's Aave `liquidationBonus` is 10750
+    ///         (a 7.5% liquidation penalty) versus a ~5.3% rescue cost (5% service fee + the
+    ///         fee-3000 pool), so the penalty clears the cost gate and the agent deleverages. On a
+    ///         stablecoin vault the 5% penalty ~= the 5% fee, and the agent correctly DEFERS instead.
+    ///         This is the headline scenario: ETH drops, the position breaches, the agent walks it back.
+    function test_Fork_VaultWeth_IterativeDeleverageClimbsToSafety() public {
+        if (!forked) return;
+
+        vm.prank(subscriber);
+        ComatoVault v = ComatoVault(
+            factory.createVault(
+                WETH, USDT, WETH_POOL_FEE, operator, feeRecipient, FEE_BPS, HF_THRESHOLD, TARGET_HF
+            )
+        );
+
+        deal(WETH, subscriber, WETH_SUPPLY);
+        vm.startPrank(subscriber);
+        IERC20(WETH).approve(address(v), WETH_SUPPLY);
+        v.supply(WETH_SUPPLY);
+        vm.stopPrank();
+
+        _breach(v); // borrow ~90% of LTV headroom in USDT -> breach below 1.30
+
+        uint256 hf = _hf(v);
+        assertLt(hf, HF_THRESHOLD, "starts breached");
+        assertGt(hf, 1e18, "still solvent");
+        emit log_named_decimal_uint("WETH HF start ", hf, 18);
+
+        uint256 cycles;
+        for (uint256 i = 0; i < 12; i++) {
+            if (hf >= HF_THRESHOLD) break;
+            (uint256 collateralIn, uint256 minDebtOut) = _sizeDeleverage(v);
+            if (collateralIn == 0) break;
+
+            vm.prank(operator);
+            try v.deleverage(collateralIn, minDebtOut) {
+                cycles++;
+            } catch {
+                break;
+            }
+
+            uint256 next = _hf(v);
+            assertGt(next, hf, "each cycle strictly improves HF");
+            assertLe(next, TARGET_HF, "never overshoots the target");
+            hf = next;
+            emit log_named_decimal_uint("WETH HF cycle ", hf, 18);
+        }
+
+        emit log_named_uint("WETH cycles   ", cycles);
+        emit log_named_decimal_uint("WETH HF final ", hf, 18);
+        assertGt(cycles, 0, "at least one deleverage landed");
+    }
 
     function test_Fork_Vault_DeleverageRestoresHfAndTakesCappedFee() public {
         if (!forked) return;

@@ -83,7 +83,7 @@ The `test/ComatoRescueFork.t.sol::test_Fork_EoaDirectRepay_*` test demonstrates 
 ```bash
 # from packages/contracts (or `bun run contracts:build` / `contracts:test` from repo root)
 forge build
-forge test                 # all 114 tests (108 unit/invariant + 6 fork)
+forge test                 # all 149 tests (136 unit/invariant + 13 fork)
 forge test --no-match-path "test/*Fork*"   # unit + invariants only, no RPC needed
 forge test --match-path "test/*Fork*" -vv  # fork integration (needs RPC): executor + guard
 forge fmt                  # format
@@ -185,7 +185,30 @@ allowance-reset, and Aave tuple indexing are all correct. The findings were econ
   submodule — matches the forge-std pattern). Remapping in `remappings.txt`:
   `@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/`.
 
-## Tests (114 total: 108 unit/invariant + 6 fork)
+## Deleverage is bounded per call (architectural fact — don't "fix" it)
+
+`ComatoVault.deleverage` **withdraws collateral before it repays**, so Aave's solvency check runs on the
+mid-transaction state (collateral removed, debt not yet repaid). That caps a single call at
+`v <= C - D/LT` of withdrawn value — and the **lower** the starting HF, the **less** one call can lift.
+This is why the vault's single-call lift looks modest (1.155 → 1.199) next to `ComatoExecutor`'s
+1.05 → 1.40: the executor repays from Comato's own float, so it never withdraws and never hits the
+mid-tx bound. A non-custodial rescue funded by the subscriber's own collateral is *structurally* more
+constrained — that is the price of non-custody, not a bug.
+
+The agent therefore **iterates**: each monitor cycle runs one bounded, HF-improving deleverage, and the
+position walks back to safety (the lift accelerates as HF rises, since more becomes withdrawable). Proven
+on live Aave by the two climb tests:
+
+| Vault | HF start | cycles | HF final |
+| --- | --- | --- | --- |
+| WETH → USDT (volatile, fee 3000) | 1.1406 | 4 | **1.4186** |
+| USDT → USDC (stable, fee 100) | 1.1553 | 3 | **1.3857** |
+
+WETH is the headline case and the one the agent's decision layer actually acts on (WETH
+`liquidationBonus` 10750 = 7.5% penalty vs ~5.3% rescue cost). On a stablecoin vault the 5% penalty ≈ the
+5% service fee, so the agent correctly **defers** — see `apps/agent/src/deliberate.ts`.
+
+## Tests (149 total: 136 unit/invariant + 13 fork)
 
 - `test/ComatoPolicy.t.sol` — CRUD, validation bounds, access control (unit; incl. fuzz).
 - `test/ComatoExecutor.t.sol` — shared-float rescue happy path, cap/float/debt bounds, reverts, float
@@ -197,6 +220,12 @@ allowance-reset, and Aave tuple indexing are all correct. The findings were econ
 - `test/ComatoGuardFactory.t.sol` — deploy (beacon owned by factory), `createGuard` tracking + seeding +
   policy↔subscriber validation, guard-admin ≠ caller, duplicate/mismatch reverts, `retireGuard` recovery,
   and the **beacon upgrade** swapping the impl for all guards while preserving storage.
+- `test/ComatoVault.t.sol` — Model C vault unit suite (init/terms, subscriber-only funds, operator-only
+  bounded deleverage, capped fee, HF-improve + no-overshoot guards) vs `MockAavePool`.
+- `test/ComatoVaultFork.t.sol` — live Aave + live Uniswap: the two **iterative climb** tests (WETH and
+  USDT, table above), single-call deleverage + capped fee, operator/healthy reverts, the non-custodial
+  subscriber-withdraw guarantee, and `test_Fork_CeloReserveIsSupplyCapped` (documents on-chain why CELO
+  collateral is unusable: supply cap = 1 token vs ~1.287M supplied).
 - `test/ComatoRescueFork.t.sol` — live Aave: executor rescue, not-breached revert, EOA-direct repay.
 - `test/ComatoGuardFork.t.sol` — live Aave: factory-deployed guard rescue restores HF (1.05→1.40) + capped
   fee delivered/bounded, whitelisted `executeBatch` deleverage, non-whitelisted revert.

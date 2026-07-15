@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import {Script, console2} from "forge-std/Script.sol";
 import {ComatoVaultFactory} from "../src/ComatoVaultFactory.sol";
+import {Script, console2} from "forge-std/Script.sol";
 
 /// @notice Deploys the ComatoVaultFactory (Model C: non-custodial deleverage vaults) to Celo mainnet.
 /// @dev Deployer (env `PRIVATE_KEY`, never logged) becomes the beacon-upgrade admin. Aave Pool +
@@ -20,7 +20,8 @@ contract DeployVault is Script {
         console2.log("deployer / admin:", admin);
 
         vm.startBroadcast(pk);
-        ComatoVaultFactory factory = new ComatoVaultFactory(AAVE_V3_POOL, UNISWAP_SWAP_ROUTER_02, admin);
+        ComatoVaultFactory factory =
+            new ComatoVaultFactory(AAVE_V3_POOL, UNISWAP_SWAP_ROUTER_02, admin);
         vm.stopBroadcast();
 
         console2.log("ComatoVaultFactory:", address(factory));
