@@ -61,6 +61,16 @@ export const DEFAULTS = {
     /** Uniswap QuoterV2 (from shared) — off-chain min-out sizing. */
     quoter: MAINNET.uniswapV3.quoterV2,
     /**
+     * Vault auto-discovery (vaults.ts). The agent reads this factory's `allVaults`
+     * and monitors the ones it operates, so a subscriber who subscribes on the web
+     * is picked up with no env edit. An explicit `VAULTS` env still overrides.
+     */
+    factory: MAINNET.comato.vaultFactory,
+    /** Re-scan the factory at most this often (ms). */
+    discoveryTtlMs: 300_000,
+    /** Cap on vaults enumerated per scan (grief bound; over-cap is logged). */
+    maxVaults: 200,
+    /**
      * DECISION knobs (deliberate.ts). HF at/below `criticalHf` = imminent
      * liquidation → rescue regardless of cost. Above it (but still breached), the
      * agent acts only when the liquidation penalty it avoids is at least

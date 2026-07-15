@@ -96,6 +96,12 @@ export interface Config {
     maxCollateralIn: bigint;
     /** Uniswap QuoterV2 used for off-chain min-out sizing. */
     quoterAddress: Address;
+    /** ComatoVaultFactory read for auto-discovery of Comato-operated vaults. */
+    factoryAddress: Address;
+    /** Re-scan the factory at most this often for new/removed vaults (ms). */
+    discoveryTtlMs: number;
+    /** Cap on vaults enumerated per factory scan (grief bound). */
+    maxVaults: number;
     /** HF at/below which liquidation is imminent → rescue regardless of cost (WAD). */
     criticalHf: bigint;
     /** Deliberate band: require penaltyBps >= costGateK * costBps to rescue. */
@@ -323,6 +329,9 @@ export function loadConfig(): Config {
       slippageBps: DEFAULTS.deleverage.slippageBps,
       maxCollateralIn: parseUnits(DEFAULTS.deleverage.maxCollateral, DEFAULTS.deleverage.collateralDecimals),
       quoterAddress: addr(DEFAULTS.deleverage.quoter, "DELEVERAGE_QUOTER"),
+      factoryAddress: addr(DEFAULTS.deleverage.factory, "DELEVERAGE_FACTORY"),
+      discoveryTtlMs: DEFAULTS.deleverage.discoveryTtlMs,
+      maxVaults: DEFAULTS.deleverage.maxVaults,
       criticalHf: parseUnits(DEFAULTS.deleverage.criticalHf, 18),
       costGateK: DEFAULTS.deleverage.costGateK,
       cooldownMs: DEFAULTS.deleverage.cooldownMs,

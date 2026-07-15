@@ -249,9 +249,38 @@ export const comatoVaultAbi = [
   },
   {
     type: "function",
+    name: "operator",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
     name: "subscriber",
     stateMutability: "view",
     inputs: [],
+    outputs: [{ type: "address" }],
+  },
+] as const;
+
+/**
+ * ComatoVaultFactory — vault enumeration for the agent's auto-discovery. The
+ * factory appends every `createVault` to `allVaults` (a public array) so the agent
+ * can find Comato-operated vaults on-chain instead of a hand-maintained env list.
+ */
+export const comatoVaultFactoryAbi = [
+  {
+    type: "function",
+    name: "vaultCount",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "allVaults",
+    stateMutability: "view",
+    inputs: [{ name: "index", type: "uint256" }],
     outputs: [{ type: "address" }],
   },
 ] as const;

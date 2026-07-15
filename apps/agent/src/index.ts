@@ -16,6 +16,7 @@ import { Monitor } from "./monitor.ts";
 import { RateLimiter } from "./eligibility.ts";
 import { Rescuer } from "./rescue.ts";
 import { Deleverager } from "./deleverage.ts";
+import { VaultRegistry } from "./vaults.ts";
 import { Treasury } from "./treasury.ts";
 import { X402Client } from "./x402.ts";
 import { Pricer } from "./pricer.ts";
@@ -160,19 +161,40 @@ async function main() {
   }
 
   // --- vault deleverage loop (Model C: non-custodial position management) ---
-  if (config.deleverage.enabled && config.vaults.length > 0) {
+  // Vaults are auto-discovered from the factory (VaultRegistry): a subscriber who
+  // subscribes on the website is picked up on the next cycle — no env edit needed.
+  // An explicit VAULTS env still pins the set. Read-only + no VAULTS has nothing to
+  // do (can't discover by operator, can't send), so the loop is skipped.
+  if (config.deleverage.enabled && (chain.account || config.vaults.length > 0)) {
     if (!tx.canSend) {
       log.warn("deleverage enabled but no key/DRY_RUN prevents sending", { event: "deleverage.no_send" });
     }
+    const vaultRegistry = new VaultRegistry(
+      chain.publicClient,
+      config.deleverage.factoryAddress,
+      chain.account?.address ?? null,
+      {
+        explicit: config.vaults,
+        ttlMs: config.deleverage.discoveryTtlMs,
+        maxVaults: config.deleverage.maxVaults,
+      },
+      createLogger("vaults"),
+    );
+    log.info("deleverage loop armed", {
+      event: "deleverage.armed",
+      source: config.vaults.length > 0 ? "env" : "factory",
+      factory: config.deleverage.factoryAddress,
+    });
     loops.push(
       startLoop("deleverage", config.monitorIntervalMs, async () => {
-        for (const vault of config.vaults) {
+        const vaults = await vaultRegistry.list();
+        for (const vault of vaults) {
           await deleverager.maybeDeleverage(vault);
         }
       }),
     );
   } else if (config.deleverage.enabled) {
-    log.warn("deleverage enabled but no vaults configured — loop idle", { event: "agent.no_vaults" });
+    log.warn("deleverage enabled but read-only with no VAULTS — loop idle", { event: "agent.no_vaults" });
   }
 
   // --- treasury loop (Track 1 volume engine) ---

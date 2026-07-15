@@ -21,6 +21,7 @@ positions, and run the treasury volume engine. Runtime: **bun + viem**.
 | Rescue | `src/rescue.ts` | Eligible breach → EOA-direct `repay(...)`, tagged (**C1**). Optional Executor safety path. |
 | Deliberate | `src/deliberate.ts` | **Decision layer** (pure): weighs a vault deleverage's cost (swap loss + service fee) against the liquidation penalty it prevents (Aave `liquidationBonus`, read on-chain), scaled by urgency (imminent vs deliberate band). Returns act/defer + a numeric rationale. Turns the deleverage from a thermostat trigger into an economic choice. |
 | Deleverage | `src/deleverage.ts` | Model C non-custodial rescue: size → quote → **deliberate** → operator-only `vault.deleverage(...)`. |
+| Vaults | `src/vaults.ts` | **Auto-discovery**: reads the factory's `allVaults`, keeps only Comato-operated vaults (grief-capped, TTL-cached, fail-safe). A web subscriber is picked up next cycle — no `VAULTS` env edit. Explicit `VAULTS` still overrides. |
 | Treasury | `src/treasury.ts` | EOA-direct tagged round-trip swaps — the Track 1 volume engine (**C1**). |
 | x402 client | `src/x402.ts` | Pays per data query (payer = wallet) → **C2** + **C3**; verifies the Celo relayer. |
 | Entry | `src/index.ts` | Wires modules, runs loops, graceful shutdown. |
