@@ -114,17 +114,21 @@ export class TxSender {
     const walletClient = this.walletClient!;
     const account = this.account!;
 
-    const hash = await withRetry(
-      () =>
-        walletClient.sendTransaction({
-          account,
-          chain: walletClient.chain as ViemChain,
-          to: a.to,
-          data: taggedData,
-          value: a.value ?? 0n,
-        }),
-      { label: `${a.label}.send`, logger: this.log, retries: 2 },
-    );
+    // NEVER retry the broadcast itself (retries: 0). A `sendTransaction` that
+    // throws after the node already accepted the tx (e.g. an HTTP timeout on the
+    // response) is INDISTINGUISHABLE from one that never left — and with the nonce
+    // manager attached a retry consumes a FRESH nonce, so a retried send that the
+    // node did receive becomes a genuine double-broadcast (two repays / two swaps).
+    // One shot only: on failure we surface the error and let the next monitor cycle
+    // re-decide on a FRESH health-factor read (O2) — a repay that actually landed
+    // moves HF and is not re-attempted; one that didn't is retried cleanly.
+    const hash = await walletClient.sendTransaction({
+      account,
+      chain: walletClient.chain as ViemChain,
+      to: a.to,
+      data: taggedData,
+      value: a.value ?? 0n,
+    });
 
     this.log.info("tx broadcast", { event: "tx.sent", label: a.label, to: a.to, hash });
 

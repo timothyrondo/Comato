@@ -3,12 +3,11 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Comato x402 premium-heartbeat server (Celo) — Track 2 x402-count engine",
+  "description": "Comato x402 premium-heartbeat server (Celo) \u2014 Track 2 x402-count engine",
   "module": "src/index.ts",
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "start": "bun run src/index.ts",
-    "heartbeat": "bun run src/heartbeat-client.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test"
   },

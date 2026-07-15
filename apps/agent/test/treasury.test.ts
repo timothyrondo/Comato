@@ -137,3 +137,46 @@ describe("treasury.runLeg guards", () => {
     expect(decodeTag(out.result!.taggedData)!.codes).toEqual(["timo_comato"]);
   });
 });
+
+describe("treasury.runCycle round-trip sizing (one-way drain guard)", () => {
+  test("return leg swaps the ACTUAL tokenB balance, not a fixed 1:1 rescale", async () => {
+    const config = makeConfig({ dryRun: false });
+    const legBAmounts: bigint[] = [];
+    const tx = {
+      canSend: true,
+      senderAddress: EOA,
+      ensureApproval: async () => {},
+      // tokenA (USDC) rich; tokenB (USDT) only 0.9 — leg A returned less than 1:1
+      // after spread+fee, so a fixed 1.0 return leg would skip_low_balance forever.
+      balanceOf: async (token: Address) =>
+        token.toLowerCase() === USDT.toLowerCase() ? parseUnits("0.9", 6) : parseUnits("100", 6),
+      sendTagged: async (a: any) => {
+        if (a.label === "treasury.swap.BtoA") legBAmounts.push(a.args[0].amountIn);
+        return { dryRun: false, taggedData: "0x", hash: "0xhash", status: "success" };
+      },
+    } as unknown as TxSender;
+
+    const outcomes = await new Treasury(tx, config, silentLog).runCycle();
+    expect(outcomes[0]!.status).toBe("swapped"); // leg A
+    expect(outcomes[1]!.status).toBe("swapped"); // leg B ran instead of skipping
+    // It swapped the available 0.9 USDT, NOT the fixed 1.0 → no one-way drain.
+    expect(legBAmounts[0]).toBe(parseUnits("0.9", 6));
+  });
+
+  test("a reverted swap is reported failed, not swapped", async () => {
+    const config = makeConfig({ dryRun: false });
+    const tx = {
+      canSend: true,
+      senderAddress: EOA,
+      ensureApproval: async () => {},
+      balanceOf: async () => parseUnits("100", 6),
+      sendTagged: async () => ({ dryRun: false, taggedData: "0x", hash: "0xhash", status: "reverted" }),
+    } as unknown as TxSender;
+
+    const out = await new Treasury(tx, config, silentLog).runLeg(
+      new Treasury({} as TxSender, config, silentLog).buildCycle()[0]!,
+    );
+    expect(out.status).toBe("failed");
+    expect(out.reason).toContain("reverted");
+  });
+});

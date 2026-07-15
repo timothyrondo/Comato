@@ -10,13 +10,46 @@
 import { Hono } from "hono";
 import { paymentMiddleware } from "@x402/hono";
 import type { RoutesConfig } from "@x402/core/server";
-import { CELO_NETWORK, USDC } from "./constants.ts";
+import type { Price } from "@x402/core/types";
+import { CELO_NETWORK, USDC, SUBSCRIBER_HEADER } from "./constants.ts";
 import { buildResourceServer, type BuildServerDeps } from "./x402-server.ts";
+import { QuoteStore } from "./quote-store.ts";
 import type { ServerConfig } from "./config.ts";
+import { logger } from "./logger.ts";
 
 export function createApp(cfg: ServerConfig, deps: BuildServerDeps = {}): Hono {
   const app = new Hono();
   const resourceServer = buildResourceServer(cfg, deps);
+  const quoteStore = new QuoteStore(cfg.quoteStorePath, {
+    maxPremiumUsdc: cfg.quoteMaxPremiumUsdc,
+    maxAgeMs: cfg.quoteMaxAgeMs,
+  });
+
+  // Explicit AssetAmount: Celo is not in the SDK's default stablecoin table,
+  // so asset + EIP-712 domain (name/version) must be supplied here.
+  const assetAmount = (amount: string) => ({
+    asset: USDC.address,
+    amount,
+    extra: { name: USDC.name, version: USDC.version },
+  });
+
+  /**
+   * Risk-priced 402: the subscriber self-identifies via header, and the premium
+   * comes from the agent's quote store. No header, no quote, or a quote that fails
+   * the store's bounds -> the flat default. The model is never in this code path —
+   * the store read is a cached file stat.
+   *
+   * Known MVP limitation: the claimed address is not yet bound to the payment's
+   * actual payer (needs a verify hook comparing authorization.from). A payer
+   * claiming another's address only changes which pre-bounded quote they pay.
+   */
+  const dynamicPrice = (ctx: { adapter: { getHeader(name: string): string | undefined } }): Price => {
+    const claimed = ctx.adapter.getHeader(SUBSCRIBER_HEADER);
+    const quote = quoteStore.lookup(claimed);
+    if (!quote) return assetAmount(cfg.premiumAtomic);
+    logger.info("price.quoted", { subscriber: claimed, riskTier: quote.riskTier, amountAtomic: quote.amountAtomic });
+    return assetAmount(quote.amountAtomic);
+  };
 
   const routes: RoutesConfig = {
     "GET /heartbeat": {
@@ -24,16 +57,10 @@ export function createApp(cfg: ServerConfig, deps: BuildServerDeps = {}): Hono {
         scheme: "exact",
         network: CELO_NETWORK,
         payTo: cfg.payTo,
-        // Explicit AssetAmount: Celo is not in the SDK's default stablecoin table,
-        // so asset + EIP-712 domain (name/version) must be supplied here.
-        price: {
-          asset: USDC.address,
-          amount: cfg.premiumAtomic,
-          extra: { name: USDC.name, version: USDC.version },
-        },
+        price: dynamicPrice,
         maxTimeoutSeconds: 120,
       },
-      description: "Comato streaming liquidation-protection heartbeat (premium settled via x402).",
+      description: "Comato streaming liquidation-protection heartbeat (risk-priced premium settled via x402).",
       mimeType: "application/json",
     },
   };

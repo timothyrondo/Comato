@@ -154,6 +154,23 @@ export interface Config {
     facilitatorUrl: string;
     relayer: Address;
   };
+
+  // --- pricer (slow-loop underwriting -> per-subscriber premiums, arch §0) ---
+  pricer: {
+    /** Off by default: the agent must keep billing at the flat premium without it. */
+    enabled: boolean;
+    /** OpenAI-compatible gateway key (DGRID). Required only when enabled. */
+    apiKey: string;
+    baseUrl: string;
+    model: string;
+    timeoutMs: number;
+    /** Where the quote store is written; the x402 server reads the same file. */
+    storePath: string;
+    /** Re-underwrite cadence. Positions move in hours, not per heartbeat. */
+    repriceIntervalMs: number;
+    /** Billing window the premium is quoted for (must match the server cadence). */
+    billingWindowMs: number;
+  };
 }
 
 interface RawSubscriber {
@@ -162,7 +179,26 @@ interface RawSubscriber {
   debtAsset?: string;
   collateralAsset?: string;
   policyId?: string | number;
-  premiumPaidUntilMs?: number;
+  /** Validated at load (parsePaidUntil); typed `unknown` because it comes from raw JSON. */
+  premiumPaidUntilMs?: unknown;
+}
+
+/**
+ * Validate `premiumPaidUntilMs` at load. It MUST be a finite number (ms epoch).
+ * The eligibility gate does `paidUntil < now`; if a human writes an ISO string
+ * ("2026-08-01") the comparison becomes `NaN < now` = false → no "expired" reason
+ * → the premium gate silently reports PAID FOREVER (fail-OPEN, the exact inverse
+ * of the fail-closed trust model). Reject non-numbers at boot, loudly.
+ */
+function parsePaidUntil(v: unknown, ctx: string): number | undefined {
+  if (v === undefined || v === null) return undefined;
+  if (typeof v !== "number" || !Number.isFinite(v)) {
+    throw new Error(
+      `${ctx}.premiumPaidUntilMs must be a finite number (ms epoch); got ${JSON.stringify(v)}. ` +
+        `A string/NaN silently disables the premium gate (fail-open) — rejected at load.`,
+    );
+  }
+  return v;
 }
 
 function parseSubscribers(json: string | undefined): RawSubscriber[] {
@@ -198,6 +234,15 @@ export function loadConfig(): Config {
   // No key => cannot send txs => force read-only + dry-run.
   const dryRun = privateKey ? bool("DRY_RUN", true) : true;
 
+  // Validate LOG_LEVEL: an invalid value (e.g. "warning") sets the threshold to
+  // undefined, and `level < undefined` is always false → EVERY level logs, the
+  // opposite of intent. Reject unknown levels at boot.
+  const VALID_LOG_LEVELS: readonly LogLevel[] = ["debug", "info", "warn", "error"];
+  const logLevel = opt("LOG_LEVEL", "info") as LogLevel;
+  if (!VALID_LOG_LEVELS.includes(logLevel)) {
+    throw new Error(`LOG_LEVEL "${logLevel}" invalid; expected one of ${VALID_LOG_LEVELS.join(", ")}.`);
+  }
+
   const defaultDebt = MAINNET.tokens.USDC;
   const rawSubs = parseSubscribers(optRaw("SUBSCRIBERS"));
   const subscribers: SubscriberConfig[] = rawSubs.map((s, i) => {
@@ -210,7 +255,7 @@ export function loadConfig(): Config {
       debtAsset: addr(s.debtAsset ?? defaultDebt, `${ctx}.debtAsset`),
       collateralAsset: s.collateralAsset ? addr(s.collateralAsset, `${ctx}.collateralAsset`) : undefined,
       policyId: s.policyId !== undefined ? BigInt(s.policyId) : undefined,
-      premiumPaidUntilMs: s.premiumPaidUntilMs,
+      premiumPaidUntilMs: parsePaidUntil(s.premiumPaidUntilMs, ctx),
     };
   });
 
@@ -223,7 +268,7 @@ export function loadConfig(): Config {
     attributionCode,
     privateKey,
     dryRun,
-    logLevel: opt("LOG_LEVEL", "info") as LogLevel,
+    logLevel,
 
     monitorIntervalMs: DEFAULTS.monitorIntervalMs,
     subscribers,
@@ -259,14 +304,36 @@ export function loadConfig(): Config {
     },
 
     x402: {
-      enabled: bool("X402_ENABLED", Boolean(optRaw("X402_DATA_URL"))),
+      // DRY_RUN must mean NO real money moves. x402 settlements are real on-chain
+      // payments through the facilitator (they burn credits and settle USDC), so a
+      // dry run disables them too — otherwise the boot log's "no transactions will
+      // be broadcast" is a lie while the agent pays every poll. To exercise the
+      // x402 leg, run with DRY_RUN=false and the other engines off.
+      enabled: !dryRun && bool("X402_ENABLED", Boolean(optRaw("X402_DATA_URL"))),
       dataUrl: optRaw("X402_DATA_URL"),
       maxValue: BigInt(DEFAULTS.x402.maxValue), // base units (e.g. 0.10 USDC @ 6dec)
       requestTimeoutMs: DEFAULTS.x402.requestTimeoutMs,
       facilitatorUrl: DEFAULTS.x402.facilitatorUrl,
       relayer: addr(DEFAULTS.x402.relayer, "X402_RELAYER"),
     },
+
+    pricer: {
+      enabled: bool("PRICER_ENABLED", false),
+      apiKey: opt("DGRID_API_KEY", ""),
+      baseUrl: opt("DGRID_BASE_URL", "https://api.dgrid.ai/v1"),
+      model: opt("DGRID_MODEL", DEFAULTS.pricer.model),
+      timeoutMs: DEFAULTS.pricer.timeoutMs,
+      storePath: opt("QUOTE_STORE_PATH", DEFAULTS.pricer.storePath),
+      repriceIntervalMs: DEFAULTS.pricer.repriceIntervalMs,
+      billingWindowMs: DEFAULTS.pricer.billingWindowMs,
+    },
   };
+
+  // An enabled pricer with no key would silently quote the default tier forever —
+  // that is a misconfiguration, not a fallback. Fail loudly at boot.
+  if (config.pricer.enabled && !config.pricer.apiKey) {
+    throw new Error("PRICER_ENABLED=true requires DGRID_API_KEY.");
+  }
 
   // Slippage bound guards the treasury swap's amountOutMinimum. Values >= 10000bps
   // (100%) disable slippage protection entirely (amountOutMinimum <= 0) or make it
@@ -301,5 +368,9 @@ export function redactConfig(c: Config) {
     treasuryEnabled: c.treasury.enabled,
     x402Enabled: c.x402.enabled,
     x402DataUrl: c.x402.dataUrl,
+    // The DGRID key itself is never logged.
+    pricerEnabled: c.pricer.enabled,
+    pricerModel: c.pricer.model,
+    quoteStorePath: c.pricer.storePath,
   };
 }

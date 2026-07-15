@@ -158,6 +158,23 @@ export class RateLimiter {
     this.history.set(key, times);
     this.persist();
   }
+
+  /**
+   * Undo the most recent `record` for a subscriber (rate-limit rollback). Called
+   * only when a rescue tx is CONFIRMED to have done nothing (receipt `reverted`) —
+   * the budget was consumed on broadcast (O1), but a reverted repay changed no
+   * state, so the subscriber must not be locked out of a real rescue for a full
+   * cooldown/window over a tx that did not spend. Ambiguous failures (no receipt)
+   * deliberately keep the record: there we cannot prove the repay didn't land.
+   */
+  unrecord(subscriber: Address): void {
+    const key = subscriber.toLowerCase();
+    const times = this.history.get(key);
+    if (!times || times.length === 0) return;
+    times.pop();
+    this.history.set(key, times);
+    this.persist();
+  }
 }
 
 /** A fresh `Pool.getUserAccountData` read: aggregate HF (WAD) + debt presence. */

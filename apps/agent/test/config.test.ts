@@ -178,17 +178,64 @@ describe("loadConfig — executor / policy addresses", () => {
 });
 
 describe("loadConfig — x402 toggle", () => {
-  test("X402_DATA_URL alone enables x402", () => {
+  test("X402_DATA_URL enables x402 when live (key + DRY_RUN=false)", () => {
+    process.env.COMATO_PRIVATE_KEY = KEY64;
+    process.env.DRY_RUN = "false";
     process.env.X402_DATA_URL = "https://data.example/price";
     const c = loadConfig();
     expect(c.x402.enabled).toBe(true);
     expect(c.x402.dataUrl).toBe("https://data.example/price");
   });
 
-  test("X402_ENABLED=false overrides even with a data URL present", () => {
+  test("x402 is DISABLED under DRY_RUN even with a data URL + key (real payments are money)", () => {
+    process.env.COMATO_PRIVATE_KEY = KEY64;
+    process.env.DRY_RUN = "true";
+    process.env.X402_DATA_URL = "https://data.example/price";
+    process.env.X402_ENABLED = "true";
+    expect(loadConfig().x402.enabled).toBe(false);
+  });
+
+  test("x402 is disabled with no key (read-only mode forces dry-run)", () => {
+    process.env.X402_DATA_URL = "https://data.example/price";
+    expect(loadConfig().x402.enabled).toBe(false);
+  });
+
+  test("X402_ENABLED=false overrides even when live", () => {
+    process.env.COMATO_PRIVATE_KEY = KEY64;
+    process.env.DRY_RUN = "false";
     process.env.X402_DATA_URL = "https://data.example/price";
     process.env.X402_ENABLED = "false";
     expect(loadConfig().x402.enabled).toBe(false);
+  });
+});
+
+describe("loadConfig — subscriber premium gate validation", () => {
+  test("premiumPaidUntilMs as a number is accepted", () => {
+    process.env.SUBSCRIBERS = JSON.stringify([{ address: USDC, premiumPaidUntilMs: 1_900_000_000_000 }]);
+    const c = loadConfig();
+    expect(c.subscribers[0]!.premiumPaidUntilMs).toBe(1_900_000_000_000);
+  });
+
+  test("premiumPaidUntilMs as an ISO string is REJECTED (would silently fail-open)", () => {
+    process.env.SUBSCRIBERS = JSON.stringify([{ address: USDC, premiumPaidUntilMs: "2026-08-01" }]);
+    expect(() => loadConfig()).toThrow(/premiumPaidUntilMs must be a finite number/);
+  });
+
+  test("premiumPaidUntilMs omitted stays undefined (unpaid → fail-closed by requirePremium)", () => {
+    process.env.SUBSCRIBERS = JSON.stringify([{ address: USDC }]);
+    expect(loadConfig().subscribers[0]!.premiumPaidUntilMs).toBeUndefined();
+  });
+});
+
+describe("loadConfig — LOG_LEVEL validation", () => {
+  test("a valid level is accepted", () => {
+    process.env.LOG_LEVEL = "warn";
+    expect(loadConfig().logLevel).toBe("warn");
+  });
+
+  test("an invalid level (typo) is rejected instead of logging everything", () => {
+    process.env.LOG_LEVEL = "warning";
+    expect(() => loadConfig()).toThrow(/LOG_LEVEL "warning" invalid/);
   });
 });
 

@@ -1,7 +1,8 @@
 /**
- * Environment-driven configuration for the Comato x402 heartbeat server and the
- * heartbeat client. Secrets are read from env only — never hard-coded. All input is
- * validated (zod + viem address/hex checks) and fails fast with a clear message.
+ * Environment-driven configuration for the Comato x402 heartbeat server.
+ * (The subscriber heartbeat client lives in the separate `comato-subscriber` repo.)
+ * Secrets are read from env only — never hard-coded. All input is validated
+ * (zod + viem address checks) and fails fast with a clear message.
  */
 
 import { z } from "zod";
@@ -20,10 +21,6 @@ type Env = Record<string, string | undefined>;
 const addressSchema = z
   .string()
   .refine((v) => isAddress(v), { message: "must be a 0x EVM address" });
-
-const privateKeySchema = z
-  .string()
-  .regex(/^0x[0-9a-fA-F]{64}$/, "must be a 0x-prefixed 32-byte hex private key");
 
 function toAtomicUsdc(value: string, label: string): string {
   try {
@@ -52,6 +49,12 @@ export interface ServerConfig {
   syncFacilitatorOnStart: boolean;
   /** Verify each settlement's on-chain sender is the Celo relayer. */
   assertRelayer: boolean;
+  /** Path to the agent-written quote store; absent file = flat premium for all. */
+  quoteStorePath: string;
+  /** Absolute ceiling for a quoted premium (decimal USDC); above it -> flat default. */
+  quoteMaxPremiumUsdc: string;
+  /** Quotes older than this are ignored (ms). */
+  quoteMaxAgeMs: number;
 }
 
 export function loadServerConfig(env: Env = process.env): ServerConfig {
@@ -64,6 +67,7 @@ export function loadServerConfig(env: Env = process.env): ServerConfig {
       .min(1, "X402_API_KEY is required — create it on the x402.celo.org dashboard; /settle 401s without it"),
     CELO_RPC: z.string().url().default(DEFAULT_CELO_RPC),
     PREMIUM_USDC: z.string().default("0.001"),
+    QUOTE_STORE_PATH: z.string().default(DEFAULTS.quoteStorePath),
   });
 
   const parsed = schema.parse(env);
@@ -80,50 +84,9 @@ export function loadServerConfig(env: Env = process.env): ServerConfig {
     port: DEFAULTS.port,
     syncFacilitatorOnStart: DEFAULTS.syncFacilitatorOnStart,
     assertRelayer: DEFAULTS.assertRelayer,
+    quoteStorePath: parsed.QUOTE_STORE_PATH,
+    quoteMaxPremiumUsdc: DEFAULTS.quoteMaxPremiumUsdc,
+    quoteMaxAgeMs: DEFAULTS.quoteMaxAgeMs,
   };
 }
 
-export interface ClientConfig {
-  heartbeatUrl: string;
-  subscriberKeys: `0x${string}`[];
-  intervalMs: number;
-  concurrency: number;
-  /** Total heartbeats to send before stopping. 0 = run forever. */
-  maxHeartbeats: number;
-  /** Upper bound per payment, atomic USDC units — guards against a mispriced route. */
-  maxValueAtomic: bigint;
-}
-
-export function loadClientConfig(env: Env = process.env): ClientConfig {
-  const schema = z.object({
-    HEARTBEAT_URL: z.string().url().default("http://localhost:4021/heartbeat"),
-    SUBSCRIBER_PRIVATE_KEYS: z.string().min(1, "SUBSCRIBER_PRIVATE_KEYS is required"),
-  });
-
-  const parsed = schema.parse(env);
-
-  const keys = parsed.SUBSCRIBER_PRIVATE_KEYS.split(",")
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0)
-    .map((k, i) => {
-      const result = privateKeySchema.safeParse(k);
-      if (!result.success) {
-        throw new Error(`SUBSCRIBER_PRIVATE_KEYS[${i}] invalid: ${result.error.issues[0]?.message}`);
-      }
-      return result.data as `0x${string}`;
-    });
-
-  if (keys.length === 0) {
-    throw new Error("SUBSCRIBER_PRIVATE_KEYS must contain at least one private key");
-  }
-
-  return {
-    heartbeatUrl: parsed.HEARTBEAT_URL,
-    subscriberKeys: keys,
-    intervalMs: DEFAULTS.heartbeatIntervalMs,
-    // No fixed constant: concurrency defaults to the subscriber count.
-    concurrency: keys.length,
-    maxHeartbeats: DEFAULTS.heartbeatMax,
-    maxValueAtomic: parseUnits(DEFAULTS.maxPaymentUsdc, USDC.decimals),
-  };
-}

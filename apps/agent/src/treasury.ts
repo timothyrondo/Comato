@@ -199,6 +199,18 @@ export class Treasury {
         label: leg.label,
       });
 
+      // A reverted swap (pool moved past amountOutMinimum, etc.) is a failure, not
+      // a "swap". Reporting it as swapped hides a leg that reverts every cycle —
+      // burning gas at the treasury cadence with zero volume and no signal.
+      if (result.status === "reverted") {
+        this.log.error("treasury swap reverted on-chain", {
+          event: "treasury.reverted",
+          label: leg.label,
+          hash: result.hash,
+        });
+        return { status: "failed", leg, amountOutMin, result, reason: "swap tx reverted" };
+      }
+
       return { status: "swapped", leg, amountOutMin, result };
     } catch (err) {
       this.log.error("treasury swap failed", {
@@ -211,10 +223,42 @@ export class Treasury {
   }
 
   async runCycle(): Promise<LegOutcome[]> {
-    const outcomes: LegOutcome[] = [];
-    for (const leg of this.buildCycle()) {
-      outcomes.push(await this.runLeg(leg));
+    const legs = this.buildCycle();
+    const [legA, legB] = legs;
+    if (!legA) return [];
+
+    const outA = await this.runLeg(legA);
+    const outcomes: LegOutcome[] = [outA];
+    if (!legB) return outcomes;
+
+    // Round-trip return leg. Leg B must swap back what leg A ACTUALLY produced, not
+    // a fixed rescale of the input: a stable swap returns slightly less than 1:1
+    // (spread + fee), so a fixed legB.amountIn is forever a hair above the received
+    // balance → `skipped_low_balance` every cycle → the fund drains ONE-WAY into
+    // tokenB (and tokenA, the rescue debt asset, bleeds to zero). Size the return
+    // leg from the real available balance instead. In dry-run (nothing swapped) or
+    // if leg A didn't swap, fall back to the originally-built leg for reporting.
+    if (outA.status === "swapped" && !outA.result?.dryRun) {
+      const balanceB = await this.tx.balanceOf(legB.tokenIn);
+      const reserveB = this.minReserveFor(legB);
+      const available = balanceB > reserveB ? balanceB - reserveB : 0n;
+      // Never swap back more than the original notional; consume what leg A yielded.
+      const sizedAmountIn = available < legB.amountIn ? available : legB.amountIn;
+      if (sizedAmountIn <= 0n) {
+        this.log.warn("treasury: no tokenB available for return leg after fees/reserve", {
+          event: "treasury.skip_return",
+          label: legB.label,
+          balanceB,
+          reserveB,
+        });
+        outcomes.push({ status: "skipped_low_balance", leg: legB, reason: "no tokenB available above reserve" });
+        return outcomes;
+      }
+      outcomes.push(await this.runLeg({ ...legB, amountIn: sizedAmountIn }));
+      return outcomes;
     }
+
+    outcomes.push(await this.runLeg(legB));
     return outcomes;
   }
 }

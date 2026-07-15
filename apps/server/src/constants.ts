@@ -54,6 +54,13 @@ export const X402_FACILITATOR_URL_TESTNET = "https://api.x402.sepolia.celo.org";
 export const X402_API_KEY_HEADER = "X-API-Key";
 
 /**
+ * How a subscriber self-identifies on `/heartbeat` so the 402 carries their
+ * risk-priced quote instead of the flat default. Claimed, not verified (MVP) —
+ * see the dynamicPrice note in app.ts.
+ */
+export const SUBSCRIBER_HEADER = "x-comato-subscriber";
+
+/**
  * Celo x402 relayer address — the `tx_from` the Dune Track-2 query keys on.
  * Stored lowercased for direct string comparison against `getTransaction().from`.
  */
@@ -88,10 +95,14 @@ export const DEFAULTS = {
   syncFacilitatorOnStart: true,
   /** Verify each settlement's on-chain sender is the Celo relayer. */
   assertRelayer: true,
-  /** Heartbeat client: ms between rounds. */
-  heartbeatIntervalMs: 15_000,
-  /** Heartbeat client: total heartbeats before stopping (0 = run forever). */
-  heartbeatMax: 0,
-  /** Heartbeat client: per-payment ceiling, decimal USDC (guards a mispriced route). */
-  maxPaymentUsdc: "0.01",
+  /** Agent-written quote store (both apps run from their own dir; ../../ = repo root). */
+  quoteStorePath: "../../.comato/quotes.json",
+  /**
+   * Hard ceiling for a quoted premium per window. The agent's pricer already bounds
+   * premiums to a 4.4-8.8% APR band, but the store file is a trust boundary — this
+   * re-clamps on the charging side. 0.05 USDC/h ≈ 8.8% APR on a $5k debt.
+   */
+  quoteMaxPremiumUsdc: "0.05",
+  /** Ignore quotes older than a day: they price yesterday's risk. */
+  quoteMaxAgeMs: 86_400_000,
 } as const;

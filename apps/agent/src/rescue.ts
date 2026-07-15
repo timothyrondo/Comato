@@ -157,6 +157,21 @@ export class Rescuer {
           onBroadcast: () => this.rateLimiter.record(subscriber),
         });
 
+        // A mined-but-REVERTED repay changed no state (Aave paused, allowance race,
+        // etc.) yet the rate limit was already consumed on broadcast. Report it as
+        // failed and roll the budget back so the position can be rescued again this
+        // window instead of sitting unprotected behind a cooldown for a no-op tx.
+        if (result.status === "reverted") {
+          this.rateLimiter.unrecord(subscriber);
+          this.log.error("rescue repay reverted on-chain", {
+            event: "rescue.reverted",
+            subscriber,
+            repayAmount,
+            hash: result.hash,
+          });
+          return { status: "failed", subscriber, repayAmount, reasons: ["repay tx reverted"], result };
+        }
+
         this.log.info("rescue executed", {
           event: "rescue.executed",
           subscriber,
@@ -208,6 +223,16 @@ export class Rescuer {
         // O1: record on broadcast, not confirmation (see the EOA-direct path).
         onBroadcast: () => this.rateLimiter.record(subscriber),
       });
+      if (result.status === "reverted") {
+        this.rateLimiter.unrecord(subscriber);
+        this.log.error("executor rescue reverted on-chain", {
+          event: "rescue.executor_reverted",
+          subscriber,
+          policyId: sub.policyId,
+          hash: result.hash,
+        });
+        return { status: "failed", subscriber, reasons: ["executor rescue tx reverted"], result };
+      }
       return { status: "executed", subscriber, result };
     } catch (err) {
       return { status: "failed", subscriber, reasons: [String(err)] };

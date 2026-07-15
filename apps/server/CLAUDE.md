@@ -2,8 +2,9 @@
 
 Paid `GET /heartbeat` gated by x402. Each successful call = **one facilitator
 settlement** with `COMATO_WALLET` as payee → **+1 Track 2 count** (plus a little
-Track 1 volume, C3). Bun + Hono. The bundled heartbeat client drives paid calls from
-self-operated test subscriber wallets to accumulate the count continuously.
+Track 1 volume, C3). Bun + Hono. Any x402 client can pay it; the reference
+subscriber client (our self-operated demo driver) lives in the separate
+`comato-subscriber` repo (private).
 
 See `../../docs/comato-architecture.md` §4 (x402 wiring) and §7.1 (streaming premium).
 
@@ -67,21 +68,20 @@ counts. `/verify`, `/supported`, `/health` are **public** (no key).
 
 ```
 src/constants.ts       Celo x402 constants (mirrors packages/shared/addresses.ts)
-src/config.ts          env loading + validation (zod + viem) — server & client
+src/config.ts          env loading + validation (zod + viem)
+src/quote-store.ts     bounded reader of the agent-written quote store (risk-priced 402)
 src/logger.ts          structured JSON-lines logger
 src/x402-server.ts     facilitator + resource server + onAfterSettle relayer assertion
 src/app.ts             Hono app: GET /heartbeat (paid) + GET /health (open)
 src/index.ts           boot + graceful shutdown (Bun.serve)
-src/heartbeat-client.ts  subscriber loop (@x402/* payer client) — the count engine
 test/heartbeat.test.ts  402 unpaid, 200 paid + settle, relayer classification
 ```
 
 ## Run
 
 ```bash
-cp .env.example .env         # fill COMATO_WALLET, X402_API_KEY, SUBSCRIBER_PRIVATE_KEYS
+cp .env.example .env         # fill COMATO_WALLET, X402_API_KEY
 bun run start                # server (bun run dev = watch mode)
-bun run heartbeat            # in another shell: drive paid heartbeats
 bun run typecheck            # tsc --noEmit
 bun test                     # mocked-facilitator tests (no funds/network needed)
 ```
@@ -94,18 +94,16 @@ pass a mock facilitator, so they run fully offline.
 ## Env
 
 `.env` holds only secrets + per-deployment values. **Tuning params (port,
-facilitator URL, `X402_SYNC_ON_START`/`X402_ASSERT_RELAYER` toggles, heartbeat
-cadence, `MAX_PAYMENT_USDC` ceiling) live in `src/constants.ts` (`DEFAULTS`)** —
-adjust them there, not in `.env`.
+facilitator URL, sync/relayer toggles, quote-store bounds) live in
+`src/constants.ts` (`DEFAULTS`)** — adjust them there, not in `.env`.
 
 | var | purpose |
 |---|---|
 | `COMATO_WALLET` | registered EOA, premium **payee** (required) |
 | `X402_API_KEY` | **required** — Celo facilitator key, sent as `X-API-Key` on `/settle` (1 credit each; 500 free mainnet / 1000 testnet). `/verify`+`/supported` are public |
-| `SUBSCRIBER_PRIVATE_KEYS` | **required** — comma-separated 0x keys of test subscribers (client) |
 | `CELO_RPC` | RPC for the relayer assertion (default forno) |
 | `PREMIUM_USDC` | premium per heartbeat, decimal USDC (default `0.001`) |
-| `HEARTBEAT_URL` | client target (default `http://localhost:4021/heartbeat`) |
+| `QUOTE_STORE_PATH` | agent-written quote store for risk-priced 402s (default `../../.comato/quotes.json`; absent = flat premium) |
 
 Secrets from env only — never commit real keys. `.env` is gitignored; `.env.example`
 holds placeholders.
@@ -119,7 +117,7 @@ holds placeholders.
    submits the on-chain transfer to `COMATO_WALLET`.
 4. That tx satisfies C2 (`tx_from = relayer`, `to = wallet`) → **+1 Track 2**, and its
    USD adds to Track 1 (C3). `onAfterSettle` logs the tx hash and confirms the relayer.
-5. The client loop repeats every `HEARTBEAT_INTERVAL_MS` across all subscribers,
-   accumulating count over the 6-day run.
+5. The subscriber client (separate `comato-subscriber` repo) repeats this every
+   billing window, accumulating count over the run.
 
 **Identity:** commits/authorship are **Timo / timothyrondo**.

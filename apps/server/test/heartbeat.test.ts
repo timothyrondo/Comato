@@ -28,6 +28,10 @@ const baseConfig: ServerConfig = {
   port: 0,
   syncFacilitatorOnStart: true,
   assertRelayer: true,
+  // Non-existent store: dynamic pricing falls back to the flat premium in tests.
+  quoteStorePath: "/nonexistent/quotes.json",
+  quoteMaxPremiumUsdc: "0.05",
+  quoteMaxAgeMs: 86_400_000,
 };
 
 /** Facilitator stub: advertises the Celo exact kind, always verifies, always settles. */

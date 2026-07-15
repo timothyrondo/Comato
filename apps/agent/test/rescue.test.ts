@@ -299,6 +299,22 @@ describe("Rescuer double-rescue safety (O1)", () => {
     expect(second.reasons?.some((r) => r.includes("cooldown"))).toBe(true);
   });
 
+  test("rolls back the rate limit when the repay reverts on-chain (re-rescue allowed)", async () => {
+    const rl = new RateLimiter(3_600_000, 3, 86_400_000); // 1h cooldown
+    const tx = stubTx(async (a) => {
+      a.onBroadcast?.("0xhash"); // broadcast records the rate limit
+      return { dryRun: false, taggedData: "0x", hash: "0xhash", status: "reverted" };
+    });
+    const rescuer = new Rescuer(pub, tx, config, rl, silentLog);
+
+    const first = await rescuer.maybeRescue(snapshot(), sub());
+    expect(first.status).toBe("failed");
+    expect(first.reasons?.some((r) => r.includes("reverted"))).toBe(true);
+
+    // The revert did nothing on-chain, so the budget was rolled back: no cooldown.
+    expect(rl.check(sub().address)).toBeNull();
+  });
+
   test("skips a second overlapping rescue for the same subscriber (idempotency)", async () => {
     const rl = new RateLimiter(0, 10, 10_000);
     let release: () => void = () => {};

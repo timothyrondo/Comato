@@ -60,6 +60,17 @@ export function makeConfig(overrides: Partial<Config> = {}): Config {
       facilitatorUrl: X402_FACILITATOR_URL,
       relayer: X402_RELAYER as Address,
     },
+    pricer: {
+      // Disabled in tests: pricing must never be a hidden dependency of other paths.
+      enabled: false,
+      apiKey: "",
+      baseUrl: "https://example.invalid/v1",
+      model: "test/model",
+      timeoutMs: 5_000,
+      storePath: "/nonexistent/quotes.json",
+      repriceIntervalMs: 21_600_000,
+      billingWindowMs: 3_600_000,
+    },
   };
   return {
     ...base,
@@ -67,5 +78,6 @@ export function makeConfig(overrides: Partial<Config> = {}): Config {
     rescue: { ...base.rescue, ...(overrides.rescue ?? {}) },
     treasury: { ...base.treasury, ...(overrides.treasury ?? {}) },
     x402: { ...base.x402, ...(overrides.x402 ?? {}) },
+    pricer: { ...base.pricer, ...(overrides.pricer ?? {}) },
   };
 }

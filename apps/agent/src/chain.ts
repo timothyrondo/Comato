@@ -9,6 +9,7 @@ import {
   createPublicClient,
   createWalletClient,
   http,
+  nonceManager,
   type PublicClient,
   type WalletClient,
   type Account,
@@ -41,7 +42,13 @@ export function createChain(config: Config): Chain {
     return { publicClient };
   }
 
-  const account = privateKeyToAccount(config.privateKey);
+  // Attach viem's nonce manager: COMATO_WALLET is a single EOA, but the monitor/
+  // rescue loop and the treasury loop both send from it concurrently. Without a
+  // nonce manager viem fills each send from getTransactionCount(pending), so two
+  // sends prepared close together grab the SAME nonce → one replaces/rejects the
+  // other (worst case: a treasury swap replaces a rescue). The manager serializes
+  // nonce assignment per (address, chainId), so concurrent sends queue instead.
+  const account = privateKeyToAccount(config.privateKey, { nonceManager });
   const walletClient = createWalletClient({
     account,
     chain: celo,

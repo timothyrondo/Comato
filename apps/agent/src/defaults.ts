@@ -77,4 +77,17 @@ export const DEFAULTS = {
     /** Celo relayer address the settlement must originate from (from shared). */
     relayer: X402_RELAYER,
   },
+
+  pricer: {
+    /** Reasoning-capable and cheap; measured ~6.5-9s per quote — slow-loop only. */
+    model: "openai/gpt-5-mini",
+    /** Generous: the pricer is fail-open, a timeout just means the default tier. */
+    timeoutMs: 30_000,
+    /** Shared with apps/server (both run from their app dir, so ../../ = repo root). */
+    storePath: "../../.comato/quotes.json",
+    /** Re-underwrite every 6h — position risk moves in hours, not per heartbeat. */
+    repriceIntervalMs: 21_600_000,
+    /** Must match the server's billing cadence (heartbeatIntervalMs, 1h). */
+    billingWindowMs: 3_600_000,
+  },
 } as const;

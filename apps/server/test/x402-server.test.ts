@@ -183,6 +183,9 @@ describe("buildResourceServer — real HTTPFacilitatorClient wiring (constructed
     port: 0,
     syncFacilitatorOnStart: true,
     assertRelayer: true,
+    quoteStorePath: "/nonexistent/quotes.json",
+    quoteMaxPremiumUsdc: "0.05",
+    quoteMaxAgeMs: 86_400_000,
   };
 
   it("builds against the real Celo HTTPFacilitatorClient with an API key (no network at construction)", () => {

@@ -17,6 +17,8 @@ import { RateLimiter } from "./eligibility.ts";
 import { Rescuer } from "./rescue.ts";
 import { Treasury } from "./treasury.ts";
 import { X402Client } from "./x402.ts";
+import { Pricer } from "./pricer.ts";
+import { QuoteWriter } from "./quotes.ts";
 
 const log = createLogger("agent");
 
@@ -122,6 +124,24 @@ async function main() {
     );
   } else {
     log.warn("no subscribers configured — monitor loop idle", { event: "agent.no_subscribers" });
+  }
+
+  // --- underwriting loop (slow loop, arch §0): reprice every subscriber's premium ---
+  // Separate from the monitor loop on purpose: a model call is seconds, a rescue is a
+  // race. The quote store is how the x402 server (another process) gets the prices.
+  if (config.pricer.enabled && config.subscribers.length > 0) {
+    const pricer = new Pricer(config.pricer, createLogger("pricer"));
+    const quoteWriter = new QuoteWriter(
+      pricer,
+      config.pricer.storePath,
+      config.pricer.billingWindowMs,
+      createLogger("quotes"),
+    );
+    loops.push(
+      startLoop("underwrite", config.pricer.repriceIntervalMs, async () => {
+        await quoteWriter.repriceAll(await monitor.pollAll());
+      }),
+    );
   }
 
   // --- treasury loop (Track 1 volume engine) ---
