@@ -60,6 +60,15 @@ export const DEFAULTS = {
     collateralDecimals: 18,
     /** Uniswap QuoterV2 (from shared) — off-chain min-out sizing. */
     quoter: MAINNET.uniswapV3.quoterV2,
+    /**
+     * DECISION knobs (deliberate.ts). HF at/below `criticalHf` = imminent
+     * liquidation → rescue regardless of cost. Above it (but still breached), the
+     * agent acts only when the liquidation penalty it avoids is at least
+     * `costGateK`x the rescue's own cost (swap loss + service fee) — otherwise it
+     * defers rather than burn the subscriber's value on an uneconomic rescue.
+     */
+    criticalHf: "1.05",
+    costGateK: 1.25,
     /** Per-vault cooldown between deleverages. */
     cooldownMs: 3_600_000,
     /** Max deleverages per vault within `windowMs`. */

@@ -96,6 +96,10 @@ export interface Config {
     maxCollateralIn: bigint;
     /** Uniswap QuoterV2 used for off-chain min-out sizing. */
     quoterAddress: Address;
+    /** HF at/below which liquidation is imminent → rescue regardless of cost (WAD). */
+    criticalHf: bigint;
+    /** Deliberate band: require penaltyBps >= costGateK * costBps to rescue. */
+    costGateK: number;
     /** Per-vault cooldown between deleverages (rate limit; reuses RateLimiter). */
     cooldownMs: number;
     /** Max deleverages per vault within `windowMs` (rate limit). */
@@ -319,6 +323,8 @@ export function loadConfig(): Config {
       slippageBps: DEFAULTS.deleverage.slippageBps,
       maxCollateralIn: parseUnits(DEFAULTS.deleverage.maxCollateral, DEFAULTS.deleverage.collateralDecimals),
       quoterAddress: addr(DEFAULTS.deleverage.quoter, "DELEVERAGE_QUOTER"),
+      criticalHf: parseUnits(DEFAULTS.deleverage.criticalHf, 18),
+      costGateK: DEFAULTS.deleverage.costGateK,
       cooldownMs: DEFAULTS.deleverage.cooldownMs,
       maxPerWindow: DEFAULTS.deleverage.maxPerWindow,
       windowMs: DEFAULTS.deleverage.windowMs,

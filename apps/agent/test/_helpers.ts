@@ -30,6 +30,8 @@ export function makeConfig(overrides: Partial<Config> = {}): Config {
       slippageBps: 100,
       maxCollateralIn: parseUnits("100000", 18),
       quoterAddress: MAINNET.uniswapV3.quoterV2 as Address,
+      criticalHf: parseUnits("1.05", 18),
+      costGateK: 1.25,
       cooldownMs: 3_600_000,
       maxPerWindow: 3,
       windowMs: 86_400_000,

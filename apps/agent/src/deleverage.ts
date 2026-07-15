@@ -36,7 +36,14 @@
 
 import { formatUnits, type Address, type PublicClient } from "viem";
 import { MAINNET } from "@comato/shared/addresses";
-import { aavePoolAbi, comatoVaultAbi, erc20Abi, quoterV2Abi } from "./abis.ts";
+import {
+  aavePoolAbi,
+  comatoVaultAbi,
+  erc20Abi,
+  protocolDataProviderAbi,
+  quoterV2Abi,
+} from "./abis.ts";
+import { deliberate, type RescueDecision } from "./deliberate.ts";
 import { RateLimiter } from "./eligibility.ts";
 import { HF_NO_DEBT } from "./monitor.ts";
 import { withRetry } from "./retry.ts";
@@ -45,8 +52,10 @@ import type { Config } from "./config.ts";
 import type { Logger } from "./logger.ts";
 
 const POOL = MAINNET.aaveV3.pool as Address;
+const DATA_PROVIDER = MAINNET.aaveV3.protocolDataProvider as Address;
 const NO_PRICE_LIMIT = 0n;
 const BPS = 10_000n;
+const USD_BASE_DECIMALS = 8; // Aave base-currency (USD) decimals
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
 
 const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -58,6 +67,7 @@ export type DeleverageStatus =
   | "skipped_in_flight"
   | "skipped_cooldown"
   | "skipped_no_size"
+  | "skipped_deferred"
   | "skipped_no_key"
   | "executed"
   | "failed";
@@ -69,9 +79,16 @@ export interface VaultState {
   hf: bigint; // WAD
   hfThreshold: bigint; // WAD
   targetHf: bigint; // WAD
+  feeBps: number; // vault service fee (bps of swap output)
   collateralAsset: Address;
   debtAsset: Address;
   poolFee: number; // Uniswap V3 fee tier
+}
+
+/** Per-asset risk params for the deliberation (static per asset; read on demand). */
+export interface AssetRisk {
+  liquidationBonusBps: number; // Aave collateral liquidationBonus (e.g. 10750)
+  debtDecimals: number; // debt-asset ERC-20 decimals (for USD scaling)
 }
 
 export interface DeleverageOutcome {
@@ -81,6 +98,7 @@ export interface DeleverageOutcome {
   collateralIn?: bigint;
   quotedOut?: bigint;
   minDebtOut?: bigint;
+  decision?: RescueDecision;
   result?: SendResult;
 }
 
@@ -139,7 +157,7 @@ export class Deleverager {
   /** Read the vault's params + current position. Fail-closed: throws propagate. */
   private async readVaultState(vault: Address): Promise<VaultState> {
     const opts = (label: string) => ({ label: `deleverage.read.${label}.${vault}`, logger: this.log, retries: 3 });
-    const [position, hfThreshold, targetHf, collateralAsset, debtAsset, poolFee] = await Promise.all([
+    const [position, hfThreshold, targetHf, feeBps, collateralAsset, debtAsset, poolFee] = await Promise.all([
       withRetry(
         () => this.publicClient.readContract({ address: vault, abi: comatoVaultAbi, functionName: "position" }),
         opts("position"),
@@ -151,6 +169,10 @@ export class Deleverager {
       withRetry(
         () => this.publicClient.readContract({ address: vault, abi: comatoVaultAbi, functionName: "targetHf" }),
         opts("targetHf"),
+      ),
+      withRetry(
+        () => this.publicClient.readContract({ address: vault, abi: comatoVaultAbi, functionName: "feeBps" }),
+        opts("feeBps"),
       ),
       withRetry(
         () => this.publicClient.readContract({ address: vault, abi: comatoVaultAbi, functionName: "collateralAsset" }),
@@ -171,10 +193,48 @@ export class Deleverager {
       hf: position[2],
       hfThreshold,
       targetHf,
+      feeBps: Number(feeBps),
       collateralAsset,
       debtAsset,
       poolFee: Number(poolFee),
     };
+  }
+
+  /**
+   * Per-asset risk parameters for the deliberation: the collateral's Aave
+   * `liquidationBonus` (the penalty a liquidation would impose) and the debt
+   * asset's decimals (to value the quoted swap output in USD). Static per asset;
+   * read fresh each cycle (cheap eth_calls) rather than cached, so a reserve
+   * re-parameterization is picked up. Fail-closed: read errors propagate.
+   */
+  private async readAssetRisk(collateralAsset: Address, debtAsset: Address): Promise<AssetRisk> {
+    const [config, debtDecimals] = await Promise.all([
+      withRetry(
+        () =>
+          this.publicClient.readContract({
+            address: DATA_PROVIDER,
+            abi: protocolDataProviderAbi,
+            functionName: "getReserveConfigurationData",
+            args: [collateralAsset],
+          }),
+        { label: `deleverage.reserveconfig.${collateralAsset}`, logger: this.log, retries: 3 },
+      ),
+      withRetry(
+        () => this.publicClient.readContract({ address: debtAsset, abi: erc20Abi, functionName: "decimals" }),
+        { label: `deleverage.debtdecimals.${debtAsset}`, logger: this.log, retries: 3 },
+      ),
+    ]);
+    return {
+      liquidationBonusBps: Number(config[3]), // getReserveConfigurationData()[3] = liquidationBonus
+      debtDecimals: Number(debtDecimals),
+    };
+  }
+
+  /** Value `amount` (in `decimals`-unit token) as Aave base USD (8-dec), treating the
+   *  debt asset as a ~$1 stable — every supported debt asset is a 6-dec EIP-3009 stable. */
+  private toUsdBase(amount: bigint, decimals: number): bigint {
+    const exp = USD_BASE_DECIMALS - decimals;
+    return exp >= 0 ? amount * 10n ** BigInt(exp) : amount / 10n ** BigInt(-exp);
   }
 
   /** The vault's collateral-token holdings (its aToken balance), in token units. */
@@ -331,8 +391,54 @@ export class Deleverager {
         return { status: "skipped_no_size", vault, collateralIn, quotedOut, reasons: ["quoted debt-out is zero"] };
       }
 
+      // DECISION LAYER — is rescuing now economically worth it, or should we wait?
+      // Read the per-asset risk (liquidation penalty + debt decimals), price both
+      // legs of the swap in USD, and let `deliberate` weigh cost vs penalty. Fail-
+      // closed: if we can't read the penalty we can't judge, so we don't act.
+      let risk: AssetRisk;
+      try {
+        risk = await this.readAssetRisk(state.collateralAsset, state.debtAsset);
+      } catch (err) {
+        this.log.error("failed to read asset risk (fail-closed)", {
+          event: "deleverage.risk_read_failed",
+          vault,
+          error: msg(err),
+        });
+        return { status: "failed", vault, collateralIn, quotedOut, minDebtOut, reasons: [`asset risk read failed: ${msg(err)}`] };
+      }
+
+      const collateralInUsd = (state.collateralBase * collateralIn) / collateralHeld;
+      const debtOutUsd = this.toUsdBase(quotedOut, risk.debtDecimals);
+      const decision = deliberate({
+        hf: state.hf,
+        criticalHf: this.config.deleverage.criticalHf,
+        collateralInUsd,
+        debtOutUsd,
+        liquidationBonusBps: risk.liquidationBonusBps,
+        feeBps: state.feeBps,
+        costGateK: this.config.deleverage.costGateK,
+      });
+
+      this.log.info("deleverage deliberation", {
+        event: "deleverage.deliberation",
+        vault,
+        act: decision.act,
+        urgency: decision.urgency,
+        hf: fmtHf(state.hf),
+        critical: fmtHf(this.config.deleverage.criticalHf),
+        penaltyBps: decision.penaltyBps,
+        swapLossBps: decision.swapLossBps,
+        feeBps: state.feeBps,
+        costBps: decision.costBps,
+        rationale: decision.rationale,
+      });
+
+      if (!decision.act) {
+        return { status: "skipped_deferred", vault, collateralIn, quotedOut, minDebtOut, decision, reasons: [decision.rationale] };
+      }
+
       if (!this.tx.canSend) {
-        return { status: "skipped_no_key", vault, collateralIn, quotedOut, minDebtOut };
+        return { status: "skipped_no_key", vault, collateralIn, quotedOut, minDebtOut, decision };
       }
 
       this.log.info("executing vault deleverage", {
@@ -379,6 +485,7 @@ export class Deleverager {
             collateralIn,
             quotedOut,
             minDebtOut,
+            decision,
             reasons: ["deleverage tx reverted"],
             result,
           };
@@ -392,10 +499,10 @@ export class Deleverager {
           hash: result.hash,
           dryRun: result.dryRun,
         });
-        return { status: "executed", vault, collateralIn, quotedOut, minDebtOut, result };
+        return { status: "executed", vault, collateralIn, quotedOut, minDebtOut, decision, result };
       } catch (err) {
         this.log.error("deleverage failed", { event: "deleverage.failed", vault, error: msg(err) });
-        return { status: "failed", vault, collateralIn, quotedOut, minDebtOut, reasons: [msg(err)] };
+        return { status: "failed", vault, collateralIn, quotedOut, minDebtOut, decision, reasons: [msg(err)] };
       }
     } finally {
       this.inFlight.delete(key);

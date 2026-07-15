@@ -242,10 +242,44 @@ export const comatoVaultAbi = [
   },
   {
     type: "function",
+    name: "feeBps",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
     name: "subscriber",
     stateMutability: "view",
     inputs: [],
     outputs: [{ type: "address" }],
+  },
+] as const;
+
+/**
+ * Aave V3 AaveProtocolDataProvider — per-asset reserve risk parameters. The
+ * deleverage deliberation reads `liquidationBonus` (bps offset, e.g. 10750 = a
+ * 7.5% seize penalty on liquidation) to weigh the rescue's cost against the
+ * penalty it prevents. Returned as separate uints (no bitmap decoding needed).
+ */
+export const protocolDataProviderAbi = [
+  {
+    type: "function",
+    name: "getReserveConfigurationData",
+    stateMutability: "view",
+    inputs: [{ name: "asset", type: "address" }],
+    outputs: [
+      { name: "decimals", type: "uint256" },
+      { name: "ltv", type: "uint256" },
+      { name: "liquidationThreshold", type: "uint256" },
+      { name: "liquidationBonus", type: "uint256" },
+      { name: "reserveFactor", type: "uint256" },
+      { name: "usageAsCollateralEnabled", type: "bool" },
+      { name: "borrowingEnabled", type: "bool" },
+      { name: "stableBorrowRateEnabled", type: "bool" },
+      { name: "isActive", type: "bool" },
+      { name: "isFrozen", type: "bool" },
+    ],
   },
 ] as const;
 

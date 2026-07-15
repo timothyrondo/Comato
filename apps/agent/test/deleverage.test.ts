@@ -49,6 +49,8 @@ function mockPublic(
     hf?: bigint;
     hfThreshold?: bigint;
     targetHf?: bigint;
+    feeBps?: bigint;
+    liquidationBonusBps?: number;
     collateralHeld?: bigint;
     quotedOut?: bigint;
   } = {},
@@ -58,6 +60,8 @@ function mockPublic(
   const hf = opts.hf ?? wad("0.95");
   const threshold = opts.hfThreshold ?? wad("1.05");
   const target = opts.targetHf ?? wad("1.10");
+  const feeBps = opts.feeBps ?? 0n;
+  const bonus = BigInt(opts.liquidationBonusBps ?? 11000); // 10% penalty by default
   const held = opts.collateralHeld ?? parseUnits("1000", 18);
   const quotedOut = opts.quotedOut ?? parseUnits("100", 6);
   return {
@@ -69,12 +73,19 @@ function mockPublic(
           return threshold;
         case "targetHf":
           return target;
+        case "feeBps":
+          return feeBps;
         case "collateralAsset":
           return CELO;
         case "debtAsset":
           return USDC;
         case "poolFee":
           return 100;
+        case "getReserveConfigurationData":
+          // [decimals, ltv, liquidationThreshold, liquidationBonus, ...] — index 3 is read.
+          return [18n, 8000n, 8500n, bonus, 0n, true, true, false, true, false];
+        case "decimals":
+          return 6; // debt asset (USDC) decimals
         case "getReserveData":
           return { aTokenAddress: ACELO };
         case "balanceOf":
@@ -189,6 +200,69 @@ describe("Deleverager.maybeDeleverage", () => {
     const out = await deleverager.maybeDeleverage(VAULT);
     expect(out.status).toBe("failed");
     expect(out.reasons?.some((r) => r.includes("vault state read failed"))).toBe(true);
+  });
+
+  // --- decision layer (deliberate.ts) wired into the driver ------------------
+
+  test("imminent breach (HF <= criticalHf) acts even with a punitive fee", async () => {
+    // Default hf=0.95 <= criticalHf 1.05 -> imminent -> act regardless of cost.
+    const { deleverager } = makeDeleverager(mockPublic({ feeBps: 5000n, liquidationBonusBps: 10500 }));
+    const out = await deleverager.maybeDeleverage(VAULT);
+    expect(out.status).toBe("executed");
+    expect(out.decision?.urgency).toBe("imminent");
+    expect(out.decision?.act).toBe(true);
+  });
+
+  test("deliberate band: defers when the rescue costs about as much as the penalty", async () => {
+    // hf 1.10 is between criticalHf (1.05) and threshold (1.30) -> deliberate band.
+    // feeBps 1000 (10%) vs a 5% liquidation penalty -> not worth it -> defer, no send.
+    const { deleverager } = makeDeleverager(
+      mockPublic({
+        hf: wad("1.10"),
+        hfThreshold: wad("1.30"),
+        targetHf: wad("1.60"),
+        feeBps: 1000n,
+        liquidationBonusBps: 10500, // 5% penalty
+      }),
+    );
+    const out = await deleverager.maybeDeleverage(VAULT);
+    expect(out.status).toBe("skipped_deferred");
+    expect(out.decision?.urgency).toBe("deliberate");
+    expect(out.decision?.act).toBe(false);
+    expect(out.decision?.penaltyBps).toBe(500);
+    expect(out.reasons?.[0]).toContain("defer");
+  });
+
+  test("deliberate band: acts when the penalty clearly outweighs the rescue cost", async () => {
+    // Same band, but a cheap rescue (fee 0) vs a 7.5% WETH-like penalty -> act.
+    const { deleverager } = makeDeleverager(
+      mockPublic({
+        hf: wad("1.10"),
+        hfThreshold: wad("1.30"),
+        targetHf: wad("1.60"),
+        feeBps: 0n,
+        liquidationBonusBps: 10750, // 7.5% penalty
+      }),
+    );
+    const out = await deleverager.maybeDeleverage(VAULT);
+    expect(out.status).toBe("executed");
+    expect(out.decision?.urgency).toBe("deliberate");
+    expect(out.decision?.act).toBe(true);
+    expect(out.decision?.penaltyBps).toBe(750);
+  });
+
+  test("fail-closed when the asset-risk read throws (cannot deliberate -> do not act)", async () => {
+    const base = mockPublic();
+    const throwing = {
+      readContract: async (a: any) => {
+        if (a.functionName === "getReserveConfigurationData") throw new Error("rpc down");
+        return (base as any).readContract(a);
+      },
+    } as unknown as PublicClient;
+    const { deleverager } = makeDeleverager(throwing);
+    const out = await deleverager.maybeDeleverage(VAULT);
+    expect(out.status).toBe("failed");
+    expect(out.reasons?.some((r) => r.includes("asset risk read failed"))).toBe(true);
   });
 });
 
