@@ -21,7 +21,7 @@ describe("App layout switch (matchMedia)", () => {
   test("mobile (<1024px) → the phone app with a tab bar", () => {
     setDesktop(false);
     const { getByText, getByLabelText } = render(<App />);
-    expect(getByText("Hi, Timo")).toBeDefined();
+    expect(getByText("Overview")).toBeDefined();
     // tab bar present
     expect(getByLabelText("Home")).toBeDefined();
     expect(getByLabelText("Position")).toBeDefined();

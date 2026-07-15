@@ -7,7 +7,7 @@ import type { Screen } from "../../src/types";
 describe("HomeScreen (mock data)", () => {
   test("greets the user and shows the protected hero + key stats", () => {
     const { getByText } = renderWithData(<HomeScreen onNavigate={() => {}} />);
-    expect(getByText("Hi, Timo")).toBeDefined();
+    expect(getByText("Overview")).toBeDefined();
     expect(getByText("Protected")).toBeDefined();
     // HF count-up snaps to the mock value
     expect(getByText("1.82")).toBeDefined();

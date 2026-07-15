@@ -214,11 +214,20 @@ function WalletButton() {
 
   if (wallet.status === "connected" && wallet.isCelo && wallet.account) {
     const addr = wallet.account;
+    // Clicking the address chip disconnects (hover swaps the label to "Disconnect").
     return (
-      <span className="glass-chip inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-[13.5px] font-semibold text-accent-ink">
-        <span className="h-2 w-2 rounded-full bg-accent-bright shadow-[0_0_8px_2px_rgba(255,168,90,0.7)]" />
-        <span className="tnum">{shortAddress(addr)}</span>
-      </span>
+      <motion.button
+        type="button"
+        onClick={wallet.disconnect}
+        whileHover={hoverPop}
+        whileTap={tapPress}
+        title="Disconnect wallet"
+        className="glass-chip group inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-[13.5px] font-semibold text-accent-ink"
+      >
+        <span className="h-2 w-2 rounded-full bg-accent-bright shadow-[0_0_8px_2px_rgba(255,168,90,0.7)] group-hover:bg-danger group-hover:shadow-none" />
+        <span className="tnum group-hover:hidden">{shortAddress(addr)}</span>
+        <span className="hidden group-hover:inline">Disconnect</span>
+      </motion.button>
     );
   }
 

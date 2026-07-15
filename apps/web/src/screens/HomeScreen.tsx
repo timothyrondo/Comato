@@ -8,7 +8,6 @@ import {
   HfCount,
   MoneyCount,
 } from "../lib/motion";
-import Avatar from "../components/Avatar";
 import PulseLine from "../components/PulseLine";
 import StatTile from "../components/StatTile";
 import PillButton from "../components/PillButton";
@@ -43,14 +42,16 @@ export default function HomeScreen({
       >
         <div className="min-w-0">
           <h1 className="text-[26px] font-extrabold leading-tight tracking-tight text-ink">
-            Hi, {user.name}
+            Overview
           </h1>
           <div className="mt-1 flex items-center gap-1.5 text-[13px] text-ink-muted">
             <MapPin size={15} className="text-ink-muted" />
             <span className="truncate">{user.contextLabel}</span>
           </div>
         </div>
-        <Avatar name={user.name} online size={46} />
+        <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-b from-accent-bright to-accent text-[#fff7ef] shadow-[0_0_20px_-6px_rgba(241,137,60,0.9)]">
+          <ShieldCheck size={22} />
+        </span>
       </motion.header>
 
       {/* Go live: connect wallet → create vault → supply CELO → borrow USDC */}
