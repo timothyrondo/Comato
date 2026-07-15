@@ -32,11 +32,11 @@ describe("useCountUp", () => {
 describe("count-up wrappers render final formatted values", () => {
   test("MoneyCount — integer", () => {
     const { getByText } = render(<MoneyCount value={12480} />);
-    expect(getByText("$12.480")).toBeDefined();
+    expect(getByText("$12,480")).toBeDefined();
   });
   test("MoneyCount — cents preserved", () => {
     const { getByText } = render(<MoneyCount value={0.02} />);
-    expect(getByText("$0,02")).toBeDefined();
+    expect(getByText("$0.02")).toBeDefined();
   });
   test("HfCount — two decimals", () => {
     const { getByText } = render(<HfCount value={1.8} />);

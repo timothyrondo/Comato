@@ -149,7 +149,7 @@ async function readPosition(
   const rescueHf = policy ? hfToNumber(policy.hfThreshold) : mockPosition.rescueHf;
 
   return {
-    ...mockPosition, // UI-only fields (monitor cadence, uptime, premium copy) kept sane
+    ...mockPosition, // UI-only fields (monitor cadence, uptime) kept sane
     healthFactor: hfToNumber(healthFactor),
     liquidationHf: 1.0,
     rescueHf,
@@ -159,6 +159,11 @@ async function readPosition(
     liquidationLtv: Number(currentLiquidationThreshold) / AAVE_BPS,
     collateralAsset: policy ? tokenSymbol(policy.collateralAsset) : mockPosition.collateralAsset,
     debtAsset: policy ? tokenSymbol(policy.debtAsset) : mockPosition.debtAsset,
+    // Use the REAL on-chain premium (USDC, 6dp) instead of the fixture value under a
+    // "Live" badge. Policy stores it per billing interval (~1h cadence).
+    premiumPerHourUsd: policy
+      ? Number(formatUnits(policy.premiumRatePerInterval, 6))
+      : mockPosition.premiumPerHourUsd,
   };
 }
 
@@ -217,7 +222,7 @@ async function readRescues(
 
 /** Local, compact USD for event subtitles (kept independent of format.ts locale). */
 function money(usd: number): string {
-  return `$${usd.toLocaleString("id-ID", { maximumFractionDigits: 0 })}`;
+  return `$${usd.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 }
 
 /** Fetch and shape all live data. Throws on the primary read failing. */

@@ -14,8 +14,8 @@ describe("HomeScreen (mock data, Demo badge)", () => {
     // absent live env → Demo badge
     expect(getByText("Demo")).toBeDefined();
     // premium + collateral tiles
-    expect(getByText("$0,02")).toBeDefined();
-    expect(getByText("$12.480")).toBeDefined();
+    expect(getByText("$0.02")).toBeDefined();
+    expect(getByText("$12,480")).toBeDefined();
   });
 
   test("recent-activity teaser shows the newest rescue", () => {

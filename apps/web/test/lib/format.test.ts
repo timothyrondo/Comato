@@ -8,23 +8,21 @@ import {
 } from "../../src/lib/format";
 
 describe("money", () => {
-  test("integer USD → id-ID grouping, no decimals", () => {
-    expect(money(12480)).toBe("$12.480");
+  test("integer USD → en-US grouping, no decimals", () => {
+    expect(money(12480)).toBe("$12,480");
     expect(money(0)).toBe("$0");
     expect(money(212)).toBe("$212");
   });
 
-  test("fractional USD → two decimals with comma", () => {
-    expect(money(0.02)).toBe("$0,02");
-    expect(money(1234.5)).toBe("$1.234,50");
+  test("fractional USD → two decimals with a dot", () => {
+    expect(money(0.02)).toBe("$0.02");
+    expect(money(1234.5)).toBe("$1,234.50");
   });
 
   test("compact abbreviates values ≥ 1000", () => {
-    // id-ID compact uses "rb" (ribu) for thousands, "jt" (juta) for millions.
-    // Intl inserts a narrow no-break space before the unit → normalise it.
-    const norm = (s: string) => s.replace(/\s+/g, " ");
-    expect(norm(money(1500, { compact: true }))).toBe("$1,5 rb");
-    expect(norm(money(1_200_000, { compact: true }))).toBe("$1,2 jt");
+    // en-US compact uses "K" for thousands, "M" for millions.
+    expect(money(1500, { compact: true })).toBe("$1.5K");
+    expect(money(1_200_000, { compact: true })).toBe("$1.2M");
   });
 
   test("compact below 1000 stays standard", () => {
@@ -43,8 +41,8 @@ describe("percent", () => {
   });
 
   test("honours a digit count", () => {
-    expect(percent(0.555, 1)).toBe("55,5%");
-    expect(percent(0, 2)).toBe("0,00%");
+    expect(percent(0.555, 1)).toBe("55.5%");
+    expect(percent(0, 2)).toBe("0.00%");
   });
 });
 

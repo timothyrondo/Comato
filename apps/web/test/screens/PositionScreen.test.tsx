@@ -15,8 +15,8 @@ describe("PositionScreen", () => {
     expect(getByText("Caution")).toBeDefined();
     expect(getAllByText("Safe").length).toBeGreaterThanOrEqual(1);
     // stats (mock)
-    expect(getByText("$12.480")).toBeDefined();
-    expect(getByText("$6.850")).toBeDefined();
+    expect(getByText("$12,480")).toBeDefined();
+    expect(getByText("$6,850")).toBeDefined();
     // rescue plan timeline present
     expect(getByText("Rescue plan")).toBeDefined();
     expect(getByText("Monitor Health Factor")).toBeDefined();

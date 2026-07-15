@@ -31,7 +31,7 @@ describe("ActivityCard", () => {
       <ActivityCard item={item({ kind: "premium", title: "Protection premium", amountUsd: 0.02 })} />,
     );
     expect(getByText("Protection premium")).toBeDefined();
-    expect(getByText("−$0,02")).toBeDefined();
+    expect(getByText("−$0.02")).toBeDefined();
     expect(container.querySelector(".glass-soft")).not.toBeNull();
   });
 

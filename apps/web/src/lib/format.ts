@@ -1,10 +1,10 @@
 /** Small formatting + risk helpers shared across screens. */
 
-/** USD money with id-ID grouping, e.g. 12480 → "$12.480", 0.02 → "$0,02". */
+/** USD money in en-US grouping, e.g. 12480 → "$12,480", 0.02 → "$0.02". */
 export function money(usd: number, opts: { compact?: boolean } = {}): string {
   const { compact = false } = opts;
   const fractionDigits = Number.isInteger(usd) ? 0 : 2;
-  const value = new Intl.NumberFormat("id-ID", {
+  const value = new Intl.NumberFormat("en-US", {
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: compact ? 1 : fractionDigits,
     notation: compact && Math.abs(usd) >= 1000 ? "compact" : "standard",
@@ -13,7 +13,7 @@ export function money(usd: number, opts: { compact?: boolean } = {}): string {
 }
 
 export function percent(fraction: number, digits = 0): string {
-  return `${new Intl.NumberFormat("id-ID", {
+  return `${new Intl.NumberFormat("en-US", {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   }).format(fraction * 100)}%`;

@@ -564,7 +564,7 @@ function PremiumRail() {
         ))}
       </dl>
       <p className="mt-4 border-t border-line pt-3 text-[11.5px] leading-relaxed text-ink-muted">
-        Paid as a gasless x402 heartbeat to COMATO_WALLET. No gas, no signatures
+        Paid as a gasless x402 heartbeat to the Comato wallet. No gas, no signatures
         from you.
       </p>
     </Panel>
