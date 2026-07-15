@@ -5,7 +5,7 @@ import {ComatoExecutor} from "../src/ComatoExecutor.sol";
 import {ComatoPolicy} from "../src/ComatoPolicy.sol";
 import {MockAavePool} from "./mocks/MockAavePool.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Test} from "forge-std/Test.sol";
 
@@ -101,8 +101,9 @@ contract ComatoExecutorTest is Test {
     }
 
     function test_Rescue_ByAuthorizedOperator() public {
+        bytes32 role = executor.OPERATOR_ROLE();
         vm.prank(owner);
-        executor.setOperator(operator, true);
+        executor.grantRole(role, operator);
         vm.prank(operator);
         uint256 repaid = executor.rescue(policyId);
         assertEq(repaid, CAP);
@@ -206,10 +207,13 @@ contract ComatoExecutorTest is Test {
         assertEq(debt.balanceOf(owner), 1000e6);
     }
 
-    function test_WithdrawFloat_RevertForNonOwner() public {
+    function test_WithdrawFloat_RevertForNonAdmin() public {
+        bytes32 adminRole = executor.DEFAULT_ADMIN_ROLE();
         vm.prank(stranger);
         vm.expectRevert(
-            abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, stranger)
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, stranger, adminRole
+            )
         );
         executor.withdrawFloat(address(debt), 1000e6, stranger);
     }
@@ -237,7 +241,7 @@ contract ComatoExecutorTest is Test {
     function test_Constructor_SetsImmutables() public view {
         assertEq(address(executor.POOL()), address(pool));
         assertEq(address(executor.POLICY_REGISTRY()), address(registry));
-        assertEq(executor.owner(), owner);
+        assertTrue(executor.hasRole(executor.DEFAULT_ADMIN_ROLE(), owner));
     }
 
     /*//////////////////////////////////////////////////////////////

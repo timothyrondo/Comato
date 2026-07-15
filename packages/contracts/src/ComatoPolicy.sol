@@ -1,20 +1,24 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 
 /// @title ComatoPolicy
 /// @author Comato
 /// @notice Registry of gasless liquidation-rescue insurance policies for Aave V3 on Celo.
-/// @dev Each policy is owned by its `subscriber` (the borrower being protected). The contract
-///      `owner` is the Comato operator/admin; additional operator addresses (e.g. the off-chain
-///      agent's hot wallet or the {ComatoExecutor}) may be authorized to read and administer
-///      policies. Reads are public views; there are no funds held here — this is pure registry
-///      state, so it carries no reentrancy surface.
-contract ComatoPolicy is Ownable {
+/// @dev Each policy is owned by its `subscriber` (the borrower being protected). Access is governed
+///      by OpenZeppelin {AccessControl} (matching the {ComatoGuard}/{ComatoGuardFactory} layer):
+///      `DEFAULT_ADMIN_ROLE` is the Comato admin (manages roles), and `OPERATOR_ROLE` holders (e.g.
+///      the off-chain agent's hot wallet or the {ComatoExecutor}) may administer policies. Reads are
+///      public views; there are no funds held here — pure registry state, no reentrancy surface.
+contract ComatoPolicy is AccessControl {
     /*//////////////////////////////////////////////////////////////
                                 CONSTANTS
     //////////////////////////////////////////////////////////////*/
+
+    /// @notice Role allowed to administer policies alongside the subscriber (e.g. the agent wallet).
+    /// @dev `DEFAULT_ADMIN_ROLE` (the deployer/admin) grants and revokes it via {AccessControl}.
+    bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
     /// @notice 1.0 in WAD, the health-factor unit used by Aave (`healthFactor < WAD` is liquidatable).
     uint256 public constant WAD = 1e18;
@@ -67,9 +71,6 @@ contract ComatoPolicy is Ownable {
     /// @notice policyId => policy.
     mapping(uint256 policyId => Policy) private _policies;
 
-    /// @notice Authorized operators (in addition to the owner) allowed to administer policies.
-    mapping(address account => bool) public isOperator;
-
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
@@ -87,9 +88,6 @@ contract ComatoPolicy is Ownable {
 
     /// @notice Emitted when a policy is deactivated. `caller` is whoever deactivated it.
     event PolicyDeactivated(uint256 indexed policyId, address indexed caller);
-
-    /// @notice Emitted when an operator is authorized or revoked.
-    event OperatorSet(address indexed account, bool allowed);
 
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
@@ -116,20 +114,10 @@ contract ComatoPolicy is Ownable {
                               CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
 
-    /// @param initialOwner The Comato admin/operator address that owns this registry.
-    constructor(address initialOwner) Ownable(initialOwner) {}
-
-    /*//////////////////////////////////////////////////////////////
-                             ADMIN FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Authorizes or revokes an operator address.
-    /// @param account The address to update.
-    /// @param allowed True to authorize, false to revoke.
-    function setOperator(address account, bool allowed) external onlyOwner {
-        if (account == address(0)) revert ZeroAddress();
-        isOperator[account] = allowed;
-        emit OperatorSet(account, allowed);
+    /// @param admin The Comato admin address; receives `DEFAULT_ADMIN_ROLE` (manages operator roles).
+    constructor(address admin) {
+        if (admin == address(0)) revert ZeroAddress();
+        _grantRole(DEFAULT_ADMIN_ROLE, admin);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -182,15 +170,16 @@ contract ComatoPolicy is Ownable {
     }
 
     /// @notice Deactivates a policy, disarming future rescues.
-    /// @dev Callable by the policy's subscriber, an authorized operator, or the owner.
+    /// @dev Callable by the policy's subscriber, an `OPERATOR_ROLE` holder, or a `DEFAULT_ADMIN_ROLE`
+    ///      holder (the admin).
     /// @param policyId The policy to deactivate.
     function deactivatePolicy(uint256 policyId) external {
         Policy storage policy = _policies[policyId];
         if (policy.subscriber == address(0)) revert PolicyNotFound();
         if (!policy.active) revert PolicyInactive();
 
-        bool authorized =
-            msg.sender == policy.subscriber || msg.sender == owner() || isOperator[msg.sender];
+        bool authorized = msg.sender == policy.subscriber || hasRole(DEFAULT_ADMIN_ROLE, msg.sender)
+            || hasRole(OPERATOR_ROLE, msg.sender);
         if (!authorized) revert NotAuthorized();
 
         policy.active = false;

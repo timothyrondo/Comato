@@ -10,7 +10,7 @@ volume-earning path is off-chain (EOA-direct); see the attribution note below.
 | File | Purpose |
 | --- | --- |
 | `src/ComatoPolicy.sol` | Insurance policy registry. Per policy: `subscriber`, `collateralAsset`, `debtAsset`, `hfThreshold` (WAD), `rescueCap`, `premiumRatePerInterval`, `active`. Subscriber owns their policy; owner/operators can administer. Pure state — holds no funds. |
-| `src/ComatoExecutor.sol` | **Shared-float reference executor** (kept). Owner/operator rescue against Comato's single pooled float; reads HF via `Pool.getUserAccountData`; if `HF < hfThreshold`, repays `min(rescueCap, float)` via `Pool.repay(..., onBehalfOf=subscriber)`. `Ownable` + `isOperator`; `nonReentrant`; SafeERC20. Anchors the fork attribution demo (executor vs EOA-direct). |
+| `src/ComatoExecutor.sol` | **Shared-float reference executor** (kept). Admin/operator rescue against Comato's single pooled float; reads HF via `Pool.getUserAccountData`; if `HF < hfThreshold`, repays `min(rescueCap, float)` via `Pool.repay(..., onBehalfOf=subscriber)`. **`AccessControl`** (`DEFAULT_ADMIN_ROLE` + `OPERATOR_ROLE`); `nonReentrant`; SafeERC20. Anchors the fork attribution demo (executor vs EOA-direct). |
 | `src/ComatoGuardFactory.sol` | **Factory** (OZ `AccessControl`). Deploys the shared `ComatoGuard` implementation + an `UpgradeableBeacon` it OWNS, then one `BeaconProxy` **guard per subscriber**. Holds the canonical whitelist template + fee defaults (seeds new guards), tracks guards (`guardOf`/`isGuard`/`allGuards`), and gates the single upgrade path (`upgradeGuards` → beacon). Roles: `DEFAULT_ADMIN_ROLE` (deployer), `OPERATOR_ROLE` (agent — may `createGuard`). |
 | `src/ComatoGuard.sol` | **Per-subscriber guard** behind a beacon proxy. `Initializable + AccessControl + Pausable + ReentrancyGuardTransient`. (1) **Whitelist-gated executor**: `execute`/`executeBatch` run operator calldata against whitelisted targets only (Aave Pool, DEX router, USDC/USDT) — the atomic deleverage path. (2) **Bounded `rescue`**: repays `min(rescueCap, float-after-fee)` of the subscriber's Aave debt, restoring HF. (3) **Capped protocol fee** on rescue (`feeBps ≤ MAX_FEE_BPS = 10%`), reserved from float so `repay + fee ≤ float`, **decoupled** so a fee-transfer failure can't revert the repay. Admin: whitelist/fee/`withdrawFloat`/`revokeAllowance`/`unpause`/roles; `GUARDIAN_ROLE`: `pause`. |
 | `src/interfaces/IAaveV3Pool.sol` | Minimal Aave V3 Pool interface (`getUserAccountData`, `supply`, `borrow`, `repay`, `withdraw`, `getReserveData`). The `ReserveData` struct layout is verified against the live Celo pool. |
@@ -70,9 +70,10 @@ The `test/ComatoRescueFork.t.sol::test_Fork_EoaDirectRepay_*` test demonstrates 
 - `SafeERC20` (`forceApprove`/`safeTransfer`) for all token movement — Celo USDC/USDT are proxies.
   Fund-moving externals that must survive a token-side revert (e.g. the guard's protocol fee) are
   decoupled via a self-external-call + try/catch so a non-critical failure can't revert a safety action.
-- Access control: `ComatoPolicy`/`ComatoExecutor` use OpenZeppelin `Ownable` + an `isOperator` mapping;
-  the `ComatoGuardFactory`/`ComatoGuard` layer uses OpenZeppelin **`AccessControl`** with
-  `DEFAULT_ADMIN_ROLE` (deployer), `OPERATOR_ROLE` (agent), `GUARDIAN_ROLE` (pauser) + `Pausable`.
+- Access control: **all** contracts use OpenZeppelin **`AccessControl`**. `ComatoPolicy`/`ComatoExecutor`
+  use `DEFAULT_ADMIN_ROLE` (admin — manages roles + `withdrawFloat`) + `OPERATOR_ROLE` (agent — rescue /
+  administer policies), replacing the former `Ownable` + `isOperator` mapping. The `ComatoGuardFactory`/
+  `ComatoGuard` layer adds `GUARDIAN_ROLE` (pauser) + `Pausable`.
 - Guard is upgradeable via `UpgradeableBeacon` + `BeaconProxy` (factory-owned beacon, admin-gated
   `upgradeGuards`); guard state uses `Initializable` + append-only layout, `ReentrancyGuardTransient`.
 - Run `forge fmt` before committing (config in `foundry.toml`).

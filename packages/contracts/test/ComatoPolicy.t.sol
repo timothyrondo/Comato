@@ -2,7 +2,7 @@
 pragma solidity 0.8.24;
 
 import {ComatoPolicy} from "../src/ComatoPolicy.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 import {Test} from "forge-std/Test.sol";
 
 /// @notice Unit tests for the policy registry: CRUD, validation, and access control.
@@ -31,7 +31,7 @@ contract ComatoPolicyTest is Test {
         uint256 premiumRatePerInterval
     );
     event PolicyDeactivated(uint256 indexed policyId, address indexed caller);
-    event OperatorSet(address indexed account, bool allowed);
+    event RoleGranted(bytes32 indexed role, address indexed account, address indexed sender);
 
     function setUp() public {
         registry = new ComatoPolicy(owner);
@@ -158,8 +158,9 @@ contract ComatoPolicyTest is Test {
 
     function test_Deactivate_ByOperator() public {
         uint256 id = _createAsAlice();
+        bytes32 role = registry.OPERATOR_ROLE();
         vm.prank(owner);
-        registry.setOperator(operator, true);
+        registry.grantRole(role, operator);
         vm.prank(operator);
         registry.deactivatePolicy(id);
         assertFalse(registry.isActive(id));
@@ -200,28 +201,35 @@ contract ComatoPolicyTest is Test {
         assertFalse(registry.isActive(42));
     }
 
-    function test_SetOperator_OnlyOwner() public {
-        vm.expectEmit(true, false, false, true);
-        emit OperatorSet(operator, true);
+    function test_GrantOperator_ByAdmin() public {
+        bytes32 role = registry.OPERATOR_ROLE();
+        vm.expectEmit(true, true, true, false);
+        emit RoleGranted(role, operator, owner);
         vm.prank(owner);
-        registry.setOperator(operator, true);
-        assertTrue(registry.isOperator(operator));
+        registry.grantRole(role, operator);
+        assertTrue(registry.hasRole(role, operator));
 
         vm.prank(owner);
-        registry.setOperator(operator, false);
-        assertFalse(registry.isOperator(operator));
+        registry.revokeRole(role, operator);
+        assertFalse(registry.hasRole(role, operator));
     }
 
-    function test_SetOperator_RevertForNonOwner() public {
+    function test_GrantOperator_RevertForNonAdmin() public {
+        // OPERATOR_ROLE is administered by DEFAULT_ADMIN_ROLE; alice lacks it.
+        bytes32 opRole = registry.OPERATOR_ROLE();
+        bytes32 adminRole = registry.DEFAULT_ADMIN_ROLE();
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, alice));
-        registry.setOperator(operator, true);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, alice, adminRole
+            )
+        );
+        registry.grantRole(opRole, operator);
     }
 
-    function test_SetOperator_RevertOnZeroAddress() public {
-        vm.prank(owner);
-        vm.expectRevert(ComatoPolicy.ZeroAddress.selector);
-        registry.setOperator(address(0), true);
+    function test_Admin_HasDefaultAdminRole() public view {
+        assertTrue(registry.hasRole(registry.DEFAULT_ADMIN_ROLE(), owner));
+        assertFalse(registry.hasRole(registry.DEFAULT_ADMIN_ROLE(), alice));
     }
 
     /*//////////////////////////////////////////////////////////////

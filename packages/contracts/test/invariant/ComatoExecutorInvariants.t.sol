@@ -103,8 +103,9 @@ contract ComatoExecutorInvariants is Test {
         handler = new ExecutorHandler(executor, registry, pool, debt, owner, subscriber, policyId);
 
         // Authorize the handler as an operator so it can trigger rescues.
+        bytes32 role = executor.OPERATOR_ROLE();
         vm.prank(owner);
-        executor.setOperator(address(handler), true);
+        executor.grantRole(role, address(handler));
 
         // Seed a live breached position.
         pool.setAccount(subscriber, 20_000e6, 15_000e6, 7800);

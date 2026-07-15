@@ -3,7 +3,7 @@ pragma solidity 0.8.24;
 
 import {ComatoPolicy} from "./ComatoPolicy.sol";
 import {IAaveV3Pool} from "./interfaces/IAaveV3Pool.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -51,14 +51,21 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 ///        4. Ensure `policy.debtAsset` is the subscriber's actual VARIABLE-rate debt asset; a repay
 ///           against an asset with no such debt reverts on live Aave (`NO_DEBT_OF_SELECTED_TYPE`).
 ///      Operator keys are hot wallets: a compromised operator can drain float to an attacker-owned
-///      position within these bounds. Containment is the owner's `withdrawFloat` + policy
+///      position within these bounds. Containment is the admin's `withdrawFloat` + policy
 ///      deactivation. A fuller on-chain premium/escrow binding is deferred (see contracts/CLAUDE.md).
-contract ComatoExecutor is Ownable, ReentrancyGuard {
+///
+/// @dev Access is governed by OpenZeppelin {AccessControl} (matching the guard layer):
+///      `DEFAULT_ADMIN_ROLE` (the admin) manages roles + `withdrawFloat`; `OPERATOR_ROLE` (and the
+///      admin) may trigger rescues.
+contract ComatoExecutor is AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     /*//////////////////////////////////////////////////////////////
                                 CONSTANTS
     //////////////////////////////////////////////////////////////*/
+
+    /// @notice Role allowed to trigger rescues (alongside the admin). Granted via {AccessControl}.
+    bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
     /// @notice Aave variable interest-rate mode (stable rate is disabled on Celo).
     uint256 public constant VARIABLE_RATE_MODE = 2;
@@ -75,13 +82,6 @@ contract ComatoExecutor is Ownable, ReentrancyGuard {
 
     /// @notice The Comato policy registry read to authorize and bound each rescue.
     ComatoPolicy public immutable POLICY_REGISTRY;
-
-    /*//////////////////////////////////////////////////////////////
-                                 STORAGE
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Addresses (besides the owner) allowed to trigger rescues.
-    mapping(address account => bool) public isOperator;
 
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
@@ -106,11 +106,8 @@ contract ComatoExecutor is Ownable, ReentrancyGuard {
     /// @notice Emitted when float is deposited into the executor.
     event FloatDeposited(address indexed asset, address indexed from, uint256 amount);
 
-    /// @notice Emitted when the owner withdraws float from the executor.
+    /// @notice Emitted when the admin withdraws float from the executor.
     event FloatWithdrawn(address indexed asset, address indexed to, uint256 amount);
-
-    /// @notice Emitted when an operator is authorized or revoked.
-    event OperatorSet(address indexed account, bool allowed);
 
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
@@ -135,32 +132,27 @@ contract ComatoExecutor is Ownable, ReentrancyGuard {
 
     /// @param pool The Aave V3 Pool address.
     /// @param policyRegistry The {ComatoPolicy} registry address.
-    /// @param initialOwner The Comato admin/operator that owns the executor and its float.
-    constructor(address pool, address policyRegistry, address initialOwner) Ownable(initialOwner) {
-        if (pool == address(0) || policyRegistry == address(0)) revert ZeroAddress();
+    /// @param admin The Comato admin; receives `DEFAULT_ADMIN_ROLE` (manages roles + float withdraw).
+    constructor(address pool, address policyRegistry, address admin) {
+        if (pool == address(0) || policyRegistry == address(0) || admin == address(0)) {
+            revert ZeroAddress();
+        }
         POOL = IAaveV3Pool(pool);
         POLICY_REGISTRY = ComatoPolicy(policyRegistry);
+        _grantRole(DEFAULT_ADMIN_ROLE, admin);
     }
 
     /*//////////////////////////////////////////////////////////////
                                 MODIFIERS
     //////////////////////////////////////////////////////////////*/
 
-    /// @dev Restricts to the owner or an authorized operator.
+    /// @dev Restricts to a `DEFAULT_ADMIN_ROLE` or `OPERATOR_ROLE` holder. Operators are granted via
+    ///      {AccessControl}'s `grantRole(OPERATOR_ROLE, ...)` by the admin.
     modifier onlyOperator() {
-        if (msg.sender != owner() && !isOperator[msg.sender]) revert NotOperator();
+        if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender) && !hasRole(OPERATOR_ROLE, msg.sender)) {
+            revert NotOperator();
+        }
         _;
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                             ADMIN FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Authorizes or revokes an operator allowed to trigger rescues.
-    function setOperator(address account, bool allowed) external onlyOwner {
-        if (account == address(0)) revert ZeroAddress();
-        isOperator[account] = allowed;
-        emit OperatorSet(account, allowed);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -177,10 +169,10 @@ contract ComatoExecutor is Ownable, ReentrancyGuard {
         emit FloatDeposited(asset, msg.sender, amount);
     }
 
-    /// @notice Withdraws `amount` of `asset` float to `to`. Owner only.
+    /// @notice Withdraws `amount` of `asset` float to `to`. Admin only.
     function withdrawFloat(address asset, uint256 amount, address to)
         external
-        onlyOwner
+        onlyRole(DEFAULT_ADMIN_ROLE)
         nonReentrant
     {
         if (asset == address(0) || to == address(0)) revert ZeroAddress();

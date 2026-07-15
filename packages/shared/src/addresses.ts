@@ -45,6 +45,13 @@ export const MAINNET = {
   erc8004: {
     identityRegistry: "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
   },
+  // Comato contracts deployed to Celo mainnet 2026-07-15 (admin/DEFAULT_ADMIN_ROLE = COMATO_WALLET).
+  // AccessControl-based (DEFAULT_ADMIN_ROLE + OPERATOR_ROLE). Safety path only — the Track-1 volume
+  // path stays EOA-direct in apps/agent (contract-mediated legs don't count for C1).
+  comato: {
+    policy: "0xd27CdB1cD00e0e5223Fa8DCfAd1310f26a8c60bb",
+    executor: "0xF0f5c2CC518060D284b3EAd3BBF0ee8C74d8556D",
+  },
 } as const;
 
 export const SEPOLIA = {
