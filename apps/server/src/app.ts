@@ -72,18 +72,23 @@ export function createApp(cfg: ServerConfig, deps: BuildServerDeps = {}): Hono {
   app.get("/health", (c) => c.json({ status: "ok", service: "comato-heartbeat" }));
 
   // Gated resource: only reached after payment verification. The body is the
-  // "protection receipt" returned to the paying subscriber.
-  app.get("/heartbeat", (c) =>
-    c.json({
+  // "protection receipt" returned to the paying subscriber. Report the premium the
+  // subscriber ACTUALLY paid (re-resolve the same quote the middleware priced from —
+  // a cheap cached lookup), not the flat config value: a subscriber charged a quoted
+  // 0.02 should not receive a receipt claiming 0.005.
+  app.get("/heartbeat", (c) => {
+    const quote = quoteStore.lookup(c.req.header(SUBSCRIBER_HEADER));
+    return c.json({
       ok: true,
       service: "comato",
       protection: "active",
       network: CELO_NETWORK,
       payTo: cfg.payTo,
-      premiumUsdc: cfg.premiumUsdc,
+      premiumUsdc: quote?.premiumUsdc ?? cfg.premiumUsdc,
+      riskTier: quote?.riskTier,
       ts: new Date().toISOString(),
-    }),
-  );
+    });
+  });
 
   return app;
 }

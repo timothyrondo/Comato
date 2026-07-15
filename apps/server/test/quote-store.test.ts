@@ -34,7 +34,18 @@ describe("QuoteStore.lookup", () => {
   it("returns the quote in atomic units, case-insensitively", () => {
     writeStore({ [SUB.toLowerCase()]: validQuote("0.034155") });
     const q = new QuoteStore(path, OPTS).lookup(SUB.toUpperCase().replace("0X", "0x"));
-    expect(q).toEqual({ amountAtomic: "34155", riskTier: "high" });
+    expect(q).toEqual({ amountAtomic: "34155", premiumUsdc: "0.034155", riskTier: "high" });
+  });
+
+  it("skips only the malformed entry — one bad quote must not blank every subscriber", () => {
+    const other = "0x" + "2".repeat(40);
+    writeStore({
+      [SUB.toLowerCase()]: validQuote("0.01"),
+      [other]: { premiumUsdc: "0.02" }, // malformed: missing riskTier/rationale/fallback/quotedAt
+    });
+    const store = new QuoteStore(path, OPTS);
+    expect(store.lookup(SUB)?.amountAtomic).toBe("10000"); // valid entry survives
+    expect(store.lookup(other)).toBeNull(); // malformed entry → flat default, not a global blank
   });
 
   it("returns null when the file does not exist", () => {

@@ -25,15 +25,20 @@ const quoteSchema = z.object({
   quotedAt: z.string(),
 });
 
-const storeSchema = z.object({
+// Envelope only. The per-entry quotes are validated INDIVIDUALLY (see load) so one
+// malformed entry can't fail the whole parse and drop EVERY subscriber to the flat
+// default — it drops only itself.
+const storeEnvelopeSchema = z.object({
   version: z.literal(1),
   updatedAt: z.string(),
-  quotes: z.record(z.string(), quoteSchema),
+  quotes: z.record(z.string(), z.unknown()),
 });
 
 export interface StoredQuote {
   /** Premium in atomic USDC units, ready for an AssetAmount. */
   amountAtomic: string;
+  /** Premium in decimal USDC as charged — what the receipt should report. */
+  premiumUsdc: string;
   riskTier: string;
 }
 
@@ -80,7 +85,7 @@ export class QuoteStore {
       return null;
     }
 
-    return { amountAtomic: atomic.toString(), riskTier: q.riskTier };
+    return { amountAtomic: atomic.toString(), premiumUsdc: q.premiumUsdc, riskTier: q.riskTier };
   }
 
   /** Read + validate the file, cached by mtime so the request path stays cheap. */
@@ -94,17 +99,29 @@ export class QuoteStore {
     if (this.cache && this.cache.mtimeMs === mtimeMs) return this.cache.quotes;
 
     try {
-      const parsed = storeSchema.safeParse(JSON.parse(readFileSync(this.path, "utf8")));
-      if (!parsed.success) {
-        logger.warn("quote.store_invalid", { path: this.path, error: parsed.error.issues[0]?.message });
+      const envelope = storeEnvelopeSchema.safeParse(JSON.parse(readFileSync(this.path, "utf8")));
+      if (!envelope.success) {
+        logger.warn("quote.store_invalid", { path: this.path, error: envelope.error.issues[0]?.message });
         return null;
       }
-      const quotes = new Map(
-        Object.entries(parsed.data.quotes).map(([addr, q]) => [
-          addr.toLowerCase(),
-          { premiumUsdc: q.premiumUsdc, riskTier: q.riskTier, quotedAt: Date.parse(q.quotedAt) || 0 },
-        ]),
-      );
+      // Validate each entry INDIVIDUALLY: a single malformed quote must not blank the
+      // price for every other subscriber. Bad entries are skipped (they fall to the
+      // flat default); good entries stand.
+      const quotes = new Map<string, { premiumUsdc: string; riskTier: string; quotedAt: number }>();
+      let skipped = 0;
+      for (const [addr, raw] of Object.entries(envelope.data.quotes)) {
+        const q = quoteSchema.safeParse(raw);
+        if (!q.success) {
+          skipped++;
+          continue;
+        }
+        quotes.set(addr.toLowerCase(), {
+          premiumUsdc: q.data.premiumUsdc,
+          riskTier: q.data.riskTier,
+          quotedAt: Date.parse(q.data.quotedAt) || 0,
+        });
+      }
+      if (skipped > 0) logger.warn("quote.entries_skipped", { path: this.path, skipped, kept: quotes.size });
       this.cache = { mtimeMs, quotes };
       return quotes;
     } catch (err) {
