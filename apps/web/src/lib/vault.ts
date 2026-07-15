@@ -45,7 +45,10 @@ export const DEBT_DECIMALS = 6;
  *
  *  - WETH → USDT (fee 3000): the volatile-collateral headline. WETH/USDC has no
  *    Celo pool, but WETH/USDT is liquid, so a WETH vault borrows USDT.
- *  - USDT → USDC (fee 100) · USDm → USDC (fee 100): stablecoin collateral (~$1).
+ *  - USDT → USDC · USDC → USDT · USDm → USDC · EURm → USDC (fee 100): stable
+ *    collateral (~$1 / ~€1) that deleverages into a 6-dp EIP-3009 stable.
+ *  - CELO is listed but `disabled`: its Aave supply cap is full, so it can't be
+ *    supplied. It renders as a dimmed, non-selectable chip (debt fields are N/A).
  */
 export interface CollateralOption {
   /** Collateral token symbol — picker label + "Supply {symbol}". */
@@ -61,6 +64,12 @@ export interface CollateralOption {
   /** Sensible default wizard amounts (asset-scaled — WETH ≠ the stables). */
   defaultSupply: string;
   defaultBorrow: string;
+  /** Picker chip icon (a `/public` path, e.g. `/weth.png`). */
+  icon?: string;
+  /** When true, the option is shown but not selectable (e.g. Aave cap full). */
+  disabled?: boolean;
+  /** Short reason surfaced on the disabled chip (title + caption). */
+  disabledReason?: string;
 }
 
 export const COLLATERAL_OPTIONS: readonly CollateralOption[] = [
@@ -74,6 +83,7 @@ export const COLLATERAL_OPTIONS: readonly CollateralOption[] = [
     poolFee: 3000,
     defaultSupply: "0.02",
     defaultBorrow: "20",
+    icon: "/weth.png",
   },
   {
     symbol: "USDT",
@@ -85,6 +95,19 @@ export const COLLATERAL_OPTIONS: readonly CollateralOption[] = [
     poolFee: 100,
     defaultSupply: "15",
     defaultBorrow: "8",
+    icon: "/usdt.png",
+  },
+  {
+    symbol: "USDC",
+    collateralAddr: TOKENS.USDC,
+    collateralDecimals: 6,
+    debtSymbol: "USDT",
+    debtAddr: TOKENS.USDT,
+    debtDecimals: DEBT_DECIMALS,
+    poolFee: 100,
+    defaultSupply: "15",
+    defaultBorrow: "8",
+    icon: "/usdc.png",
   },
   {
     symbol: "USDm",
@@ -96,17 +119,47 @@ export const COLLATERAL_OPTIONS: readonly CollateralOption[] = [
     poolFee: 100,
     defaultSupply: "15",
     defaultBorrow: "8",
+    icon: "/usdm.png",
+  },
+  {
+    symbol: "EURm",
+    collateralAddr: TOKENS.EURm,
+    collateralDecimals: 18,
+    debtSymbol: "USDC",
+    debtAddr: TOKENS.USDC,
+    debtDecimals: DEBT_DECIMALS,
+    poolFee: 100,
+    defaultSupply: "15",
+    defaultBorrow: "8",
+    icon: "/eurm.png",
+  },
+  {
+    // Aave supply cap is full → CELO cannot be supplied. Listed for context but
+    // not selectable, so its debt fields are inert (N/A) and never read.
+    symbol: "CELO",
+    collateralAddr: TOKENS.CELO,
+    collateralDecimals: 18,
+    debtSymbol: "—",
+    debtAddr: ZERO_ADDRESS,
+    debtDecimals: DEBT_DECIMALS,
+    poolFee: 0,
+    defaultSupply: "0",
+    defaultBorrow: "0",
+    icon: "/celo.png",
+    disabled: true,
+    disabledReason: "Aave supply cap full — cannot be supplied",
   },
 ];
 
 /** The default collateral (WETH — the volatile-collateral headline demo). */
 export const DEFAULT_COLLATERAL: CollateralOption = COLLATERAL_OPTIONS[0];
 
-/** Resolve a collateral option by symbol (e.g. from a live vault's terms),
- *  falling back to the default when unknown. */
+/** Resolve a *selectable* collateral option by symbol (e.g. from a live vault's
+ *  terms), falling back to the default when unknown or disabled. */
 export function collateralOptionBySymbol(symbol: string): CollateralOption {
   return (
-    COLLATERAL_OPTIONS.find((o) => o.symbol === symbol) ?? DEFAULT_COLLATERAL
+    COLLATERAL_OPTIONS.find((o) => !o.disabled && o.symbol === symbol) ??
+    DEFAULT_COLLATERAL
   );
 }
 

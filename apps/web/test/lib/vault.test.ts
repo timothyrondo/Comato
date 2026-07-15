@@ -278,37 +278,72 @@ describe("runFunding", () => {
 });
 
 describe("collateral options drive createVault + supply", () => {
-  test("shape: WETH default (→USDT, fee 3000); USDT + USDm (→USDC, fee 100)", () => {
-    expect(DEFAULT_COLLATERAL).toBe(COLLATERAL_OPTIONS[0]);
+  const bySym = (s: string) => COLLATERAL_OPTIONS.find((o) => o.symbol === s)!;
 
-    const weth = COLLATERAL_OPTIONS[0];
-    expect(weth.symbol).toBe("WETH");
+  test("shape: 5 selectable assets (each own debt + fee + icon) + disabled CELO", () => {
+    // WETH is the default, first entry.
+    expect(DEFAULT_COLLATERAL).toBe(COLLATERAL_OPTIONS[0]);
+    expect(DEFAULT_COLLATERAL.symbol).toBe("WETH");
+
+    const weth = bySym("WETH");
     expect(weth.collateralAddr).toBe(TOKENS.WETH);
     expect(weth.collateralDecimals).toBe(18);
     expect(weth.debtSymbol).toBe("USDT");
     expect(weth.debtAddr).toBe(TOKENS.USDT);
     expect(weth.debtDecimals).toBe(6);
     expect(weth.poolFee).toBe(3000);
+    expect(weth.icon).toBe("/weth.png");
+    expect(weth.disabled).toBeFalsy();
 
-    const usdt = COLLATERAL_OPTIONS[1];
-    expect(usdt.symbol).toBe("USDT");
+    const usdt = bySym("USDT");
     expect(usdt.collateralAddr).toBe(TOKENS.USDT);
     expect(usdt.collateralDecimals).toBe(6);
+    expect(usdt.debtSymbol).toBe("USDC");
     expect(usdt.debtAddr).toBe(TOKENS.USDC);
     expect(usdt.poolFee).toBe(100);
+    expect(usdt.icon).toBe("/usdt.png");
 
-    const usdm = COLLATERAL_OPTIONS[2];
-    expect(usdm.symbol).toBe("USDm");
+    // USDC → USDT (fee 100) — the new mirror of the USDT option.
+    const usdc = bySym("USDC");
+    expect(usdc.collateralAddr).toBe(TOKENS.USDC);
+    expect(usdc.collateralDecimals).toBe(6);
+    expect(usdc.debtSymbol).toBe("USDT");
+    expect(usdc.debtAddr).toBe(TOKENS.USDT);
+    expect(usdc.poolFee).toBe(100);
+    expect(usdc.icon).toBe("/usdc.png");
+
+    const usdm = bySym("USDm");
     expect(usdm.collateralAddr).toBe(TOKENS.USDm);
     expect(usdm.collateralDecimals).toBe(18);
     expect(usdm.debtAddr).toBe(TOKENS.USDC);
     expect(usdm.poolFee).toBe(100);
+    expect(usdm.icon).toBe("/usdm.png");
+
+    // EURm → USDC (fee 100) — new euro-stable collateral.
+    const eurm = bySym("EURm");
+    expect(eurm.collateralAddr).toBe(TOKENS.EURm);
+    expect(eurm.collateralDecimals).toBe(18);
+    expect(eurm.debtSymbol).toBe("USDC");
+    expect(eurm.debtAddr).toBe(TOKENS.USDC);
+    expect(eurm.poolFee).toBe(100);
+    expect(eurm.icon).toBe("/eurm.png");
+
+    // CELO is present but disabled (Aave supply cap full) → not selectable.
+    const celo = bySym("CELO");
+    expect(celo.collateralAddr).toBe(TOKENS.CELO);
+    expect(celo.disabled).toBe(true);
+    expect(celo.disabledReason).toBeDefined();
+    expect(celo.icon).toBe("/celo.png");
   });
 
-  test("collateralOptionBySymbol resolves known symbols, else the default", () => {
-    expect(collateralOptionBySymbol("USDm")).toBe(COLLATERAL_OPTIONS[2]);
+  test("collateralOptionBySymbol resolves selectable symbols, else the default", () => {
+    expect(collateralOptionBySymbol("USDm")).toBe(bySym("USDm"));
+    expect(collateralOptionBySymbol("EURm")).toBe(bySym("EURm"));
+    expect(collateralOptionBySymbol("USDC")).toBe(bySym("USDC"));
     expect(collateralOptionBySymbol("WETH")).toBe(COLLATERAL_OPTIONS[0]);
-    expect(collateralOptionBySymbol("CELO")).toBe(DEFAULT_COLLATERAL); // unknown → default
+    // CELO is disabled → skipped → falls back to the default (WETH), not the CELO entry.
+    expect(collateralOptionBySymbol("CELO")).toBe(DEFAULT_COLLATERAL);
+    expect(collateralOptionBySymbol("NOPE")).toBe(DEFAULT_COLLATERAL);
   });
 
   // The core of the "dynamic collateral" change: the picked option must change

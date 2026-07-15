@@ -114,19 +114,22 @@ function StatusChip({ tone, children }: { tone: "muted" | "accent" | "safe" | "w
   );
 }
 
-/* Amount input with a token suffix (glass-soft tile). */
+/* Amount input with a token suffix (glass-soft tile). The value starts empty and
+   `placeholder` shows the suggested default as a grey hint (not a filled value). */
 function AmountField({
   label,
   token,
   value,
   onChange,
   disabled,
+  placeholder = "0.0",
 }: {
   label: string;
   token: string;
   value: string;
   onChange: (v: string) => void;
   disabled?: boolean;
+  placeholder?: string;
 }) {
   return (
     <label className="block">
@@ -139,7 +142,7 @@ function AmountField({
           value={value}
           disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="0.0"
+          placeholder={placeholder}
           aria-label={label}
           className="tnum w-full min-w-0 bg-transparent text-[16px] font-semibold text-ink outline-none placeholder:text-ink-muted disabled:opacity-60"
         />
@@ -232,7 +235,9 @@ function stepLabels(c: CollateralOption): Record<StepId, string> {
   };
 }
 
-/* Segmented on-brand collateral toggle (only shown while creating a vault). */
+/* On-brand collateral picker (only shown while creating a vault). Six glass
+   icon+symbol chips wrap in a responsive grid; the shared `layoutId` pill glides
+   to the active one. CELO is a dimmed, non-selectable chip (Aave cap full). */
 function CollateralPicker({
   value,
   onChange,
@@ -253,18 +258,29 @@ function CollateralPicker({
         className="glass-soft mt-1.5 grid grid-cols-3 gap-1 rounded-tile p-1"
       >
         {COLLATERAL_OPTIONS.map((opt) => {
-          const active = opt.symbol === value.symbol;
+          const optDisabled = !!opt.disabled;
+          const active = !optDisabled && opt.symbol === value.symbol;
+          const btnDisabled = optDisabled || disabled;
           return (
             <motion.button
               key={opt.symbol}
               type="button"
               role="radio"
               aria-checked={active}
-              aria-label={`${opt.symbol} collateral`}
-              disabled={disabled}
-              onClick={() => onChange(opt)}
-              whileTap={disabled ? undefined : { scale: 0.97 }}
-              className="relative flex items-center justify-center rounded-2xl px-3 py-2 text-[13px] font-semibold transition-colors disabled:opacity-60"
+              aria-disabled={optDisabled || undefined}
+              aria-label={
+                optDisabled
+                  ? `${opt.symbol} — ${opt.disabledReason ?? "unavailable"}`
+                  : `${opt.symbol} collateral`
+              }
+              title={optDisabled ? opt.disabledReason : undefined}
+              disabled={btnDisabled}
+              onClick={() => !optDisabled && onChange(opt)}
+              whileTap={btnDisabled ? undefined : { scale: 0.96 }}
+              className={
+                "relative flex min-h-[66px] flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2.5 transition-colors " +
+                (optDisabled ? "cursor-not-allowed opacity-45" : "")
+              }
             >
               {active && (
                 <motion.span
@@ -273,14 +289,27 @@ function CollateralPicker({
                   className="absolute inset-0 rounded-2xl bg-accent-soft"
                 />
               )}
+              {opt.icon && (
+                <img
+                  src={opt.icon}
+                  alt=""
+                  aria-hidden
+                  className="relative z-10 h-6 w-6 rounded-full object-cover"
+                />
+              )}
               <span
                 className={
-                  "relative z-10 " +
+                  "relative z-10 text-[12.5px] font-semibold leading-none " +
                   (active ? "text-accent-ink" : "text-ink-soft")
                 }
               >
                 {opt.symbol}
               </span>
+              {optDisabled && (
+                <span className="relative z-10 text-[9px] font-medium uppercase tracking-[0.06em] leading-none text-ink-muted">
+                  Cap full
+                </span>
+              )}
             </motion.button>
           );
         })}
@@ -336,12 +365,11 @@ function WizardBody({
   const [selected, setSelected] = useState<CollateralOption>(initialCollateral);
   const collateral = needCreate ? selected : vaultCollateral;
 
-  const [supplyAmount, setSupplyAmount] = useState(
-    initialCollateral.defaultSupply,
-  );
-  const [borrowAmount, setBorrowAmount] = useState(
-    initialCollateral.defaultBorrow,
-  );
+  // Amounts start EMPTY — the option's defaults are shown only as placeholders
+  // (grey hints), never as pre-filled values. The CTA stays disabled until the
+  // user types positive amounts (see `amountsValid`).
+  const [supplyAmount, setSupplyAmount] = useState("");
+  const [borrowAmount, setBorrowAmount] = useState("");
   const [steps, setSteps] = useState<Record<StepId, StepStatus>>(() =>
     initialSteps(vault.fundingStage),
   );
@@ -354,11 +382,11 @@ function WizardBody({
     if (!running) setSteps(initialSteps(vault.fundingStage));
   }, [vault.fundingStage, running]);
 
-  // Switching collateral reseeds the amounts (0.02 WETH ≠ 15 USDT).
+  // Switching collateral only reselects — it updates the placeholders (via
+  // `collateral`), never the typed values, which stay whatever the user entered
+  // (empty unless typed). Different assets scale differently (0.02 WETH ≠ 15 USDT).
   function pickCollateral(opt: CollateralOption) {
     setSelected(opt);
-    setSupplyAmount(opt.defaultSupply);
-    setBorrowAmount(opt.defaultBorrow);
   }
 
   const labels = stepLabels(collateral);
@@ -439,6 +467,7 @@ function WizardBody({
             value={supplyAmount}
             onChange={setSupplyAmount}
             disabled={running}
+            placeholder={collateral.defaultSupply}
           />
         )}
         <AmountField
@@ -447,6 +476,7 @@ function WizardBody({
           value={borrowAmount}
           onChange={setBorrowAmount}
           disabled={running}
+          placeholder={collateral.defaultBorrow}
         />
       </div>
 

@@ -14,6 +14,9 @@ describe("verified Celo addresses (checksummed)", () => {
   test("token map", () => {
     expect(TOKENS.USDC).toBe("0xcebA9300f2b948710d2653dD7B07f33A8B32118C");
     expect(TOKENS.USDT).toBe("0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e");
+    expect(TOKENS.USDm).toBe("0x765DE816845861e75A25fCA122bb6898B8B1282a");
+    expect(TOKENS.EURm).toBe("0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73");
+    expect(TOKENS.WETH).toBe("0xD221812de1BD094f35587EE8E174B07B6167D9Af");
     expect(TOKENS.CELO).toBe("0x471EcE3750Da237f93B8E339c536989b8978a438");
   });
   test("Aave scaling constants", () => {
