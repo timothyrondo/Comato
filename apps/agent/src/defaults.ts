@@ -46,6 +46,29 @@ export const DEFAULTS = {
     stateFile: ".comato/rate-limiter-state.json",
   },
 
+  deleverage: {
+    /**
+     * Slippage tolerance for the collateral->debt swap min-out (bps). The vault's
+     * collateral (e.g. CELO) and debt (USDC) are NOT a 1:1 pair, so this is wider
+     * than the treasury's 50bps stable tolerance. The real min-out comes from a
+     * QuoterV2 quote; this only backs off from the quoted amount.
+     */
+    slippageBps: 100,
+    /** Absolute cap on collateral withdrawn per deleverage (human decimal, scaled by collateralDecimals). */
+    maxCollateral: "100000",
+    /** Decimals of the vault collateral token (CELO = 18). Backstop-cap scaling only. */
+    collateralDecimals: 18,
+    /** Uniswap QuoterV2 (from shared) — off-chain min-out sizing. */
+    quoter: MAINNET.uniswapV3.quoterV2,
+    /** Per-vault cooldown between deleverages. */
+    cooldownMs: 3_600_000,
+    /** Max deleverages per vault within `windowMs`. */
+    maxPerWindow: 3,
+    windowMs: 86_400_000,
+    /** Rate-limiter state file (reloaded on boot so a restart keeps cooldowns). "" disables. */
+    stateFile: ".comato/deleverage-rate-limiter-state.json",
+  },
+
   treasury: {
     intervalMs: 60_000,
     /** Verified USDC/USDT stable pair (from shared). */

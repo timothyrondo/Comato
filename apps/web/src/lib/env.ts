@@ -58,3 +58,40 @@ export function readLiveConfig(): LiveConfig | null {
 
 export const liveConfig = readLiveConfig();
 export const isLiveConfigured = liveConfig !== null;
+
+/*//////////////////////////////////////////////////////////////
+              SUBSCRIBE FLOW — wallet-driven config
+//////////////////////////////////////////////////////////////*/
+
+/**
+ * Config for the browser subscribe + position flow (create a vault, supply, and
+ * borrow with a connected wallet). Independent of {@link LiveConfig}: it does not
+ * need an RPC or a fixed subscriber — the connected wallet supplies both. Every
+ * field is optional; the flow degrades gracefully (connect still works; the
+ * "Protect a position" wizard is disabled until a factory + operator are set).
+ */
+export interface SubscribeConfig {
+  /** Chain the wallet must be on (Celo mainnet / fork = 42220). */
+  chainId: number;
+  /** ComatoVaultFactory — deploys the caller's vault; absent ⇒ create disabled. */
+  factoryAddr?: Address;
+  /** Comato operator the new vault authorizes to `deleverage`. */
+  operatorAddr?: Address;
+  /** Where the vault sends its capped service fee (defaults to the operator). */
+  feeRecipient?: Address;
+}
+
+/** Resolve the subscribe-flow config from env. Never throws. */
+export function readSubscribeConfig(): SubscribeConfig {
+  const env = import.meta.env;
+  const chainId = Number.parseInt(env.VITE_CHAIN_ID ?? "42220", 10);
+  const operatorAddr = optAddr(env.VITE_OPERATOR_ADDR);
+  return {
+    chainId: Number.isFinite(chainId) ? chainId : 42220,
+    factoryAddr: optAddr(env.VITE_VAULT_FACTORY_ADDR),
+    operatorAddr,
+    feeRecipient: optAddr(env.VITE_FEE_RECIPIENT_ADDR) ?? operatorAddr,
+  };
+}
+
+export const subscribeConfig = readSubscribeConfig();

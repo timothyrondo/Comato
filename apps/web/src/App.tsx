@@ -2,6 +2,7 @@ import { useState } from "react";
 import { MotionConfig } from "framer-motion";
 import type { Screen } from "./types";
 import { ComatoDataProvider } from "./data/context";
+import { WalletProvider } from "./data/wallet";
 import { useIsDesktop } from "./lib/useIsDesktop";
 import { motion, AnimatePresence, screenFade } from "./lib/motion";
 import AmbientBackground from "./components/AmbientBackground";
@@ -22,9 +23,10 @@ export default function App() {
     // transforms/layout are stripped, opacity is kept. Imperative helpers
     // (count-up, path-draw) additionally branch on useReducedMotion().
     <MotionConfig reducedMotion="user">
-      <ComatoDataProvider>
-        {/* Shared frosted-over-ambient canvas for both layouts */}
-        <AmbientBackground />
+      <WalletProvider>
+        <ComatoDataProvider>
+          {/* Shared frosted-over-ambient canvas for both layouts */}
+          <AmbientBackground />
 
         {isDesktop ? (
           <DesktopApp screen={screen} onNavigate={setScreen} />
@@ -53,7 +55,8 @@ export default function App() {
             <TabBar active={screen} onChange={setScreen} />
           </PhoneFrame>
         )}
-      </ComatoDataProvider>
+        </ComatoDataProvider>
+      </WalletProvider>
     </MotionConfig>
   );
 }

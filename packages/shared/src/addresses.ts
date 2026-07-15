@@ -51,7 +51,14 @@ export const MAINNET = {
   comato: {
     policy: "0xd27CdB1cD00e0e5223Fa8DCfAd1310f26a8c60bb",
     executor: "0xF0f5c2CC518060D284b3EAd3BBF0ee8C74d8556D",
+    // Model C — non-custodial deleverage vaults (deployed 2026-07-15, admin = COMATO_WALLET).
+    vaultFactory: "0x7A4ef436A54D93D54157BA12a8160564F4806D9e",
+    vaultImplementation: "0xCFa53B26049D6cCdD3Faf67164Bd2ECCa7d2Ac3e",
+    vaultBeacon: "0x910793a27f734AC90f33b4523cC024a3c11E365B",
   },
+  // ⚠️ Aave Celo reserve note (verified 2026-07-15): CELO supply cap is FULL (SupplyCapExceeded) —
+  // CELO CANNOT be supplied as collateral today. Model C demo uses USDT collateral / USDC debt
+  // (USDT supplyCap 11.6M with room; USDT->USDC swap liquid on the fee-100 pool).
 } as const;
 
 export const SEPOLIA = {

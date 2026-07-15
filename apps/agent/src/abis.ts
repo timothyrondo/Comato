@@ -163,6 +163,128 @@ export const comatoPolicyAbi = [
   },
 ] as const;
 
+/**
+ * ComatoVault (Model C) — per-subscriber non-custodial Aave guard. The operator
+ * (COMATO_WALLET) has exactly one power: `deleverage`, bounded by the vault to fire
+ * only while HF < hfThreshold and only up to targetHf. Layout copied from
+ * packages/contracts/src/ComatoVault.sol. Views are used to size the deleverage.
+ *
+ * NOTE on attribution: `deleverage` moves the SUBSCRIBER'S own funds inside the
+ * vault (Aave pulls from the vault, the swap router pulls from the vault), so its
+ * legs are contract-internal and do NOT count for Track 1 (C1) — the same trade-off
+ * as ComatoExecutor. This is the non-custodial SAFETY path; the Track-1 volume path
+ * stays EOA-direct (treasury.ts / rescue.ts EOA-direct repay).
+ */
+export const comatoVaultAbi = [
+  {
+    type: "function",
+    name: "deleverage",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "collateralIn", type: "uint256" },
+      { name: "minDebtOut", type: "uint256" },
+    ],
+    outputs: [{ name: "repaid", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "healthFactor",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "hf", type: "uint256" }],
+  },
+  {
+    // Aggregate position in Aave base units (USD, 8 dec) + HF (WAD).
+    type: "function",
+    name: "position",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      { name: "collateralBase", type: "uint256" },
+      { name: "debtBase", type: "uint256" },
+      { name: "hf", type: "uint256" },
+    ],
+  },
+  {
+    type: "function",
+    name: "collateralAsset",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    name: "debtAsset",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    name: "poolFee",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint24" }],
+  },
+  {
+    type: "function",
+    name: "hfThreshold",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "targetHf",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "subscriber",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+] as const;
+
+/**
+ * Uniswap QuoterV2 — off-chain min-out sizing for the deleverage swap.
+ *
+ * Param tuple order is (tokenIn, tokenOut, amountIn, fee, sqrtPriceLimitX96) —
+ * NOTE this DIFFERS from SwapRouter02's ExactInputSingleParams (which puts `fee`
+ * before `amountIn`). Declared `view` so viem `readContract` (an `eth_call`) can
+ * type-check and invoke it; the deployed QuoterV2 marks the fn `nonpayable`
+ * (it uses the swap-and-revert trick internally), but `eth_call` runs it fine.
+ */
+export const quoterV2Abi = [
+  {
+    type: "function",
+    name: "quoteExactInputSingle",
+    stateMutability: "view",
+    inputs: [
+      {
+        name: "params",
+        type: "tuple",
+        components: [
+          { name: "tokenIn", type: "address" },
+          { name: "tokenOut", type: "address" },
+          { name: "amountIn", type: "uint256" },
+          { name: "fee", type: "uint24" },
+          { name: "sqrtPriceLimitX96", type: "uint160" },
+        ],
+      },
+    ],
+    outputs: [
+      { name: "amountOut", type: "uint256" },
+      { name: "sqrtPriceX96After", type: "uint160" },
+      { name: "initializedTicksCrossed", type: "uint32" },
+      { name: "gasEstimate", type: "uint256" },
+    ],
+  },
+] as const;
+
 /** ComatoExecutor — the atomic safety path (does NOT earn Track 1; see C1). */
 export const comatoExecutorAbi = [
   {

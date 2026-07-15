@@ -24,6 +24,18 @@ export function makeConfig(overrides: Partial<Config> = {}): Config {
     logLevel: "error",
     monitorIntervalMs: 30_000,
     subscribers: [],
+    vaults: [],
+    deleverage: {
+      enabled: true,
+      slippageBps: 100,
+      maxCollateralIn: parseUnits("100000", 18),
+      quoterAddress: MAINNET.uniswapV3.quoterV2 as Address,
+      cooldownMs: 3_600_000,
+      maxPerWindow: 3,
+      windowMs: 86_400_000,
+      // In-memory only for tests (RateLimiter constructed without a persist path).
+      rateLimitStatePath: "",
+    },
     rescue: {
       enabled: true,
       distressHf: parseUnits("1.05", 18),
@@ -75,6 +87,7 @@ export function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
     ...base,
     ...overrides,
+    deleverage: { ...base.deleverage, ...(overrides.deleverage ?? {}) },
     rescue: { ...base.rescue, ...(overrides.rescue ?? {}) },
     treasury: { ...base.treasury, ...(overrides.treasury ?? {}) },
     x402: { ...base.x402, ...(overrides.x402 ?? {}) },

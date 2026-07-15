@@ -14,6 +14,7 @@ import StatTile from "../components/StatTile";
 import PillButton from "../components/PillButton";
 import SectionHeader from "../components/SectionHeader";
 import ActivityCard from "../components/ActivityCard";
+import SubscribeFlow from "../components/SubscribeFlow";
 import { ShieldCheck, ArrowRight, MapPin } from "../components/icons";
 
 export default function HomeScreen({
@@ -51,6 +52,11 @@ export default function HomeScreen({
         </div>
         <Avatar name={user.name} online size={46} />
       </motion.header>
+
+      {/* Go live: connect wallet → create vault → supply CELO → borrow USDC */}
+      <motion.div variants={fadeRise} className="mt-5">
+        <SubscribeFlow />
+      </motion.div>
 
       {/* Hero status card */}
       <motion.section

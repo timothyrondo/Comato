@@ -20,6 +20,12 @@ interface ImportMetaEnv {
   readonly VITE_POLICY_ID?: string;
   /** First block to scan for RescueExecuted logs (keeps getLogs off Celo history). */
   readonly VITE_FROM_BLOCK?: string;
+  /** ComatoVaultFactory address (browser subscribe flow — create a vault). */
+  readonly VITE_VAULT_FACTORY_ADDR?: string;
+  /** Comato operator the newly created vault authorizes to `deleverage`. */
+  readonly VITE_OPERATOR_ADDR?: string;
+  /** Optional fee recipient for the vault (defaults to the operator address). */
+  readonly VITE_FEE_RECIPIENT_ADDR?: string;
   /**
    * Optional background image for the warm ambient canvas. A Vite-resolvable
    * URL (imported asset URL or a `/public` path like `/bg.jpg`). Rendered

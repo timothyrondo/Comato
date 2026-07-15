@@ -82,6 +82,29 @@ export interface Config {
   monitorIntervalMs: number;
   subscribers: SubscriberConfig[];
 
+  // --- vaults (Model C: non-custodial per-subscriber deleverage) ---
+  /** ComatoVault addresses to monitor for deleverage. Per-deployment (env VAULTS). */
+  vaults: Address[];
+
+  // --- deleverage (vault operator deleverage; SAFETY path, does NOT count for C1) ---
+  deleverage: {
+    /** Off by default, like the other engines. */
+    enabled: boolean;
+    /** Slippage tolerance for the collateral->debt swap min-out, in bps. */
+    slippageBps: number;
+    /** Absolute cap on collateral withdrawn per deleverage (base units of the collateral token). */
+    maxCollateralIn: bigint;
+    /** Uniswap QuoterV2 used for off-chain min-out sizing. */
+    quoterAddress: Address;
+    /** Per-vault cooldown between deleverages (rate limit; reuses RateLimiter). */
+    cooldownMs: number;
+    /** Max deleverages per vault within `windowMs` (rate limit). */
+    maxPerWindow: number;
+    windowMs: number;
+    /** Rate-limiter persistence path (O3). Empty string disables (in-memory only). */
+    rateLimitStatePath?: string;
+  };
+
   // --- rescue (EOA-direct repay, tagged -> Track 1 via C1) ---
   rescue: {
     enabled: boolean;
@@ -213,6 +236,19 @@ function parseSubscribers(json: string | undefined): RawSubscriber[] {
   return parsed as RawSubscriber[];
 }
 
+/** Parse the VAULTS env var: a JSON array of ComatoVault addresses (validated below). */
+function parseVaults(json: string | undefined): string[] {
+  if (!json) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch (e) {
+    throw new Error(`VAULTS must be valid JSON: ${(e as Error).message}`);
+  }
+  if (!Array.isArray(parsed)) throw new Error("VAULTS must be a JSON array of addresses");
+  return parsed.map((v) => String(v));
+}
+
 export function loadConfig(): Config {
   const attributionCode = req("ATTRIBUTION_CODE").trim();
   if (!CODE_RE.test(attributionCode)) {
@@ -259,6 +295,10 @@ export function loadConfig(): Config {
     };
   });
 
+  // Vault addresses are per-deployment (the orchestrator deploys + wires them), so
+  // they come from env like SUBSCRIBERS — not from DEFAULTS.
+  const vaults = parseVaults(optRaw("VAULTS")).map((v, i) => addr(v, `VAULTS[${i}]`));
+
   const executorRaw = optRaw("EXECUTOR_ADDRESS");
   const policyRaw = optRaw("POLICY_ADDRESS");
 
@@ -272,6 +312,19 @@ export function loadConfig(): Config {
 
     monitorIntervalMs: DEFAULTS.monitorIntervalMs,
     subscribers,
+    vaults,
+
+    deleverage: {
+      enabled: bool("DELEVERAGE_ENABLED", false),
+      slippageBps: DEFAULTS.deleverage.slippageBps,
+      maxCollateralIn: parseUnits(DEFAULTS.deleverage.maxCollateral, DEFAULTS.deleverage.collateralDecimals),
+      quoterAddress: addr(DEFAULTS.deleverage.quoter, "DELEVERAGE_QUOTER"),
+      cooldownMs: DEFAULTS.deleverage.cooldownMs,
+      maxPerWindow: DEFAULTS.deleverage.maxPerWindow,
+      windowMs: DEFAULTS.deleverage.windowMs,
+      // Empty string ("") disables on-disk persistence (in-memory limiter only).
+      rateLimitStatePath: DEFAULTS.deleverage.stateFile,
+    },
 
     rescue: {
       enabled: bool("RESCUE_ENABLED", false),
@@ -344,6 +397,14 @@ export function loadConfig(): Config {
     );
   }
 
+  // The deleverage min-out backs off the QuoterV2 amountOut by slippageBps; >= 10000
+  // (100%) makes amountOutMinimum <= 0 (no slippage protection) — reject at load.
+  if (config.deleverage.slippageBps < 0 || config.deleverage.slippageBps >= 10_000) {
+    throw new Error(
+      `DELEVERAGE_SLIPPAGE_BPS must be in [0, 10000); got ${config.deleverage.slippageBps} (>=10000 disables slippage protection).`,
+    );
+  }
+
   // O7: the treasury's amountOutMinimum assumes a ~1:1 USD-stable pair. Only enforce
   // when the engine is actually enabled — fail fast at boot on a misconfigured pair.
   if (config.treasury.enabled) {
@@ -363,6 +424,8 @@ export function redactConfig(c: Config) {
     dryRun: c.dryRun,
     monitorIntervalMs: c.monitorIntervalMs,
     subscribers: c.subscribers.length,
+    vaults: c.vaults.length,
+    deleverageEnabled: c.deleverage.enabled,
     rescueEnabled: c.rescue.enabled,
     rescueViaExecutor: c.rescue.viaExecutor,
     treasuryEnabled: c.treasury.enabled,

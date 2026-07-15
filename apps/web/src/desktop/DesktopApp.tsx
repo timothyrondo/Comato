@@ -22,6 +22,7 @@ import ActivityCard from "../components/ActivityCard";
 import RescueTimeline from "../components/RescueTimeline";
 import PulseLine from "../components/PulseLine";
 import Avatar from "../components/Avatar";
+import SubscribeFlow from "../components/SubscribeFlow";
 import {
   ShieldCheck,
   Grid,
@@ -633,6 +634,7 @@ function OverviewView({ onNavigate }: { onNavigate: (s: Screen) => void }) {
       <HeroBanner />
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_350px] 2xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="space-y-5">
+          <SubscribeFlow />
           <RingStats compact />
           <ChartCard />
           <PositionRow onNavigate={onNavigate} />

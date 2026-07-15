@@ -43,6 +43,10 @@ process.env.VITE_SUBSCRIBER_ADDR = "0x71c7656ec7ab88b098defb751b7401b5f6d8976f";
 process.env.VITE_POLICY_ADDR = "0x3e59a31363e2ad014dcbc521c4a0d5757d9f3402";
 process.env.VITE_POLICY_ID = "1";
 process.env.VITE_FROM_BLOCK = "100";
+// Subscribe-flow config (browser vault flow). Present so the connected branches
+// of SubscribeFlow are reachable; no test reaches the network (viem is stubbed).
+process.env.VITE_VAULT_FACTORY_ADDR = "0x1111111111111111111111111111111111111111";
+process.env.VITE_OPERATOR_ADDR = "0x2222222222222222222222222222222222222222";
 
 /* ── 5. matchMedia (controllable; default = mobile) ─────── */
 type MatchState = { matches: boolean };
