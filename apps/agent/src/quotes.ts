@@ -12,9 +12,8 @@
 
 import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { formatUnits } from "viem";
+import { formatUnits, type Address } from "viem";
 import type { Logger } from "./logger.ts";
-import type { HealthSnapshot } from "./monitor.ts";
 import type { Pricer, PricedQuote } from "./pricer.ts";
 
 /** Shape of the store file. The server re-validates on read — never trusts this blindly. */
@@ -27,6 +26,22 @@ export interface QuoteStoreFile {
   >;
 }
 
+/**
+ * A position the pricer can underwrite, from EITHER source that the premium
+ * covers: a legacy Aave-EOA subscriber (aggregate position) or a Model C vault
+ * (keyed by its owner). Unifying them here is the seam that lets the x402 premium
+ * be priced from the real vault's risk, not just the old subscriber path.
+ */
+export interface UnderwritablePosition {
+  /** The quote key — the vault owner or the Aave-EOA subscriber. */
+  subscriber: Address;
+  healthFactor: bigint; // WAD
+  collateralBase: bigint; // USD, 8 dec
+  debtBase: bigint; // USD, 8 dec
+  /** Human description of the collateral for the underwriter (precise for vaults). */
+  collateralMix: string;
+}
+
 export class QuoteWriter {
   constructor(
     private readonly pricer: Pricer,
@@ -36,29 +51,29 @@ export class QuoteWriter {
   ) {}
 
   /**
-   * Underwrite every monitored position and publish the store. Positions with no
-   * debt are skipped (nothing to insure); a failed quote falls back inside the
-   * pricer, so this always publishes something for every debtor.
+   * Underwrite every position and publish the store. Positions with no debt are
+   * skipped (nothing to insure); a failed quote falls back inside the pricer, so
+   * this always publishes something for every debtor. The input is the unified
+   * {@link UnderwritablePosition} so both the legacy subscriber path and the
+   * Model C vaults feed one store, keyed by subscriber/owner address.
    */
-  async repriceAll(snapshots: HealthSnapshot[]): Promise<void> {
+  async repriceAll(positions: UnderwritablePosition[]): Promise<void> {
     const quotes: QuoteStoreFile["quotes"] = {};
 
-    for (const snap of snapshots) {
-      if (snap.totalDebtBase <= 0n) continue;
+    for (const pos of positions) {
+      if (pos.debtBase <= 0n) continue;
       const quote: PricedQuote = await this.pricer.quote(
         {
-          subscriber: snap.subscriber,
-          healthFactor: snap.healthFactor,
+          subscriber: pos.subscriber,
+          healthFactor: pos.healthFactor,
           // Aave base currency is USD with 8 decimals.
-          debtUsd: Number(formatUnits(snap.totalDebtBase, 8)),
-          collateralUsd: Number(formatUnits(snap.totalCollateralBase, 8)),
-          // getUserAccountData is an aggregate; per-reserve composition needs the
-          // data provider. The model is told it is unknown rather than guessed.
-          collateralMix: "composition unknown (aggregate position)",
+          debtUsd: Number(formatUnits(pos.debtBase, 8)),
+          collateralUsd: Number(formatUnits(pos.collateralBase, 8)),
+          collateralMix: pos.collateralMix,
         },
         this.billingWindowMs,
       );
-      quotes[snap.subscriber.toLowerCase()] = {
+      quotes[pos.subscriber.toLowerCase()] = {
         premiumUsdc: quote.premiumUsdc,
         riskTier: quote.riskTier,
         rationale: quote.rationale,

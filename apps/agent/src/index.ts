@@ -16,11 +16,11 @@ import { Monitor } from "./monitor.ts";
 import { RateLimiter } from "./eligibility.ts";
 import { Rescuer } from "./rescue.ts";
 import { Deleverager } from "./deleverage.ts";
-import { VaultRegistry } from "./vaults.ts";
+import { VaultRegistry, readVaultUnderwrite } from "./vaults.ts";
 import { Treasury } from "./treasury.ts";
 import { X402Client } from "./x402.ts";
 import { Pricer } from "./pricer.ts";
-import { QuoteWriter } from "./quotes.ts";
+import { QuoteWriter, type UnderwritablePosition } from "./quotes.ts";
 
 const log = createLogger("agent");
 
@@ -115,6 +115,21 @@ async function main() {
 
   const loops: Array<{ stop: () => Promise<void> }> = [];
 
+  // --- vault registry (shared by the underwrite + deleverage loops) ---
+  // Both the premium pricer (below) and the deleverage loop need the set of
+  // Model C vaults this agent operates, so discover them once. Read-only with no
+  // explicit VAULTS can't discover by operator, so there's nothing to share.
+  const vaultRegistry =
+    (config.deleverage.enabled || config.pricer.enabled) && (chain.account || config.vaults.length > 0)
+      ? new VaultRegistry(
+          chain.publicClient,
+          config.deleverage.factoryAddress,
+          chain.account?.address ?? null,
+          { explicit: config.vaults, ttlMs: config.deleverage.discoveryTtlMs, maxVaults: config.deleverage.maxVaults },
+          createLogger("vaults"),
+        )
+      : null;
+
   // --- monitor + rescue loop ---
   if (config.subscribers.length > 0) {
     loops.push(
@@ -142,10 +157,14 @@ async function main() {
     log.warn("no subscribers configured — monitor loop idle", { event: "agent.no_subscribers" });
   }
 
-  // --- underwriting loop (slow loop, arch §0): reprice every subscriber's premium ---
+  // --- underwriting loop (slow loop, arch §0): reprice every premium ---
   // Separate from the monitor loop on purpose: a model call is seconds, a rescue is a
   // race. The quote store is how the x402 server (another process) gets the prices.
-  if (config.pricer.enabled && config.subscribers.length > 0) {
+  // Prices BOTH sources the premium covers: legacy Aave-EOA subscribers AND the
+  // Model C vaults (keyed by owner) — so an x402 heartbeat is a genuine, risk-priced
+  // payment for monitoring a real vault, not a flat fee for nothing. This is the
+  // bridge that makes "the premium IS the Track 2 engine" true for Model C.
+  if (config.pricer.enabled && (config.subscribers.length > 0 || vaultRegistry)) {
     const pricer = new Pricer(config.pricer, createLogger("pricer"));
     const quoteWriter = new QuoteWriter(
       pricer,
@@ -153,9 +172,28 @@ async function main() {
       config.pricer.billingWindowMs,
       createLogger("quotes"),
     );
+    const underwriteLog = createLogger("underwrite");
     loops.push(
       startLoop("underwrite", config.pricer.repriceIntervalMs, async () => {
-        await quoteWriter.repriceAll(await monitor.pollAll());
+        // Legacy Aave-EOA subscribers → aggregate positions.
+        const positions: UnderwritablePosition[] = (await monitor.pollAll())
+          .filter((s) => s.totalDebtBase > 0n)
+          .map((s) => ({
+            subscriber: s.subscriber,
+            healthFactor: s.healthFactor,
+            collateralBase: s.totalCollateralBase,
+            debtBase: s.totalDebtBase,
+            collateralMix: "composition unknown (aggregate position)",
+          }));
+        // Model C vaults → precise per-vault underwriting, keyed by owner.
+        if (vaultRegistry) {
+          const vaults = await vaultRegistry.list();
+          const underwrites = await Promise.all(
+            vaults.map((v) => readVaultUnderwrite(chain.publicClient, v, underwriteLog)),
+          );
+          for (const u of underwrites) if (u) positions.push(u);
+        }
+        await quoteWriter.repriceAll(positions);
       }),
     );
   }
@@ -165,21 +203,10 @@ async function main() {
   // subscribes on the website is picked up on the next cycle — no env edit needed.
   // An explicit VAULTS env still pins the set. Read-only + no VAULTS has nothing to
   // do (can't discover by operator, can't send), so the loop is skipped.
-  if (config.deleverage.enabled && (chain.account || config.vaults.length > 0)) {
+  if (config.deleverage.enabled && vaultRegistry) {
     if (!tx.canSend) {
       log.warn("deleverage enabled but no key/DRY_RUN prevents sending", { event: "deleverage.no_send" });
     }
-    const vaultRegistry = new VaultRegistry(
-      chain.publicClient,
-      config.deleverage.factoryAddress,
-      chain.account?.address ?? null,
-      {
-        explicit: config.vaults,
-        ttlMs: config.deleverage.discoveryTtlMs,
-        maxVaults: config.deleverage.maxVaults,
-      },
-      createLogger("vaults"),
-    );
     log.info("deleverage loop armed", {
       event: "deleverage.armed",
       source: config.vaults.length > 0 ? "env" : "factory",

@@ -25,11 +25,82 @@
  */
 
 import type { Address, PublicClient } from "viem";
+import { MAINNET } from "@comato/shared/addresses";
 import { comatoVaultAbi, comatoVaultFactoryAbi } from "./abis.ts";
 import { withRetry } from "./retry.ts";
 import type { Logger } from "./logger.ts";
+import type { UnderwritablePosition } from "./quotes.ts";
 
 const eqAddr = (a: Address, b: Address): boolean => a.toLowerCase() === b.toLowerCase();
+
+/** Known Celo token symbols for the underwriter's collateral description. */
+const TOKEN_SYMBOLS: Record<string, string> = {
+  [MAINNET.tokens.USDC.toLowerCase()]: "USDC",
+  [MAINNET.tokens.USDT.toLowerCase()]: "USDT",
+  [MAINNET.tokens.CELO.toLowerCase()]: "CELO",
+  "0xd221812de1bd094f35587ee8e174b07b6167d9af": "WETH", // WETH on Celo (not in shared tokens)
+};
+
+function symbolOf(addr: Address): string {
+  return TOKEN_SYMBOLS[addr.toLowerCase()] ?? `token ${addr.slice(0, 6)}…`;
+}
+
+/**
+ * Read a discovered vault as an {@link UnderwritablePosition}, keyed by its OWNER
+ * (the subscriber who pays the streaming premium). This is the bridge that lets
+ * the x402 premium be risk-priced from the real Model C vault: the agent already
+ * monitors the vault to deleverage it, and now it also underwrites it so the
+ * server can charge a premium that reflects the vault's actual position.
+ *
+ * Returns null when the vault has no debt (nothing to insure) or a read fails
+ * (the caller simply omits it from this cycle's quote store — fail-soft).
+ */
+export async function readVaultUnderwrite(
+  client: PublicClient,
+  vault: Address,
+  log: Logger,
+): Promise<UnderwritablePosition | null> {
+  try {
+    const opts = (label: string) => ({ label: `underwrite.${label}.${vault}`, logger: log, retries: 2 });
+    const [position, owner, collateralAsset, debtAsset] = await Promise.all([
+      withRetry(
+        () => client.readContract({ address: vault, abi: comatoVaultAbi, functionName: "position" }),
+        opts("position"),
+      ),
+      withRetry(
+        () => client.readContract({ address: vault, abi: comatoVaultAbi, functionName: "subscriber" }),
+        opts("subscriber"),
+      ),
+      withRetry(
+        () => client.readContract({ address: vault, abi: comatoVaultAbi, functionName: "collateralAsset" }),
+        opts("collateralAsset"),
+      ),
+      withRetry(
+        () => client.readContract({ address: vault, abi: comatoVaultAbi, functionName: "debtAsset" }),
+        opts("debtAsset"),
+      ),
+    ]);
+    const [collateralBase, debtBase, hf] = position as readonly [bigint, bigint, bigint];
+    if (debtBase <= 0n) return null; // no debt → nothing to underwrite
+
+    return {
+      subscriber: owner as Address,
+      healthFactor: hf,
+      collateralBase,
+      debtBase,
+      // Unlike the aggregate Aave read, a vault knows its exact assets — give the
+      // underwriter the precise pair instead of "composition unknown".
+      collateralMix: `${symbolOf(collateralAsset as Address)} collateral → ${symbolOf(debtAsset as Address)} debt (non-custodial vault)`,
+    };
+  } catch (err) {
+    log.warn("vault underwrite read failed (skipped this cycle)", {
+      event: "underwrite.vault_read_failed",
+      vault,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
 
 export interface VaultRegistryOptions {
   /** Explicit VAULTS override; when non-empty, the factory is never read. */
