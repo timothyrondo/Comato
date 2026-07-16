@@ -39,8 +39,15 @@ const wad = (n: string) => parseUnits(n, 18);
  *   erc20.balanceOf(ACELO)  -> collateralHeld (CELO token units)
  *   quoter.quoteExactInput  -> [quotedOut, 0, 0, 0]
  *
- * Defaults describe a genuine breach: C=200 USD, D=100 USD, hf=0.95, threshold=1.05,
- * target=1.10 -> debtReduction r = 24 USD; with T=1000 CELO -> collateralIn = 120 CELO.
+ * Defaults describe a genuine, SOLVENT breach: C=200 USD, D=139 USD, hf=1.15,
+ * threshold=1.3, target=1.6, T=1000 collateral units. (C·0.8/D = 1.151, so the
+ * position is consistent with an LT of 80% rather than synthetic.)
+ *
+ * The old defaults used hf=0.95 — an UNDERWATER position. Aave reverts any withdraw
+ * there (mid-tx HF < 1 no matter how small the slice), so a deleverage cannot fix it
+ * at all; only a repay funded from outside can. Sizing tests built on it were
+ * asserting a scenario that could never execute on-chain, which is part of why the
+ * missing mid-tx bound survived to the first live mainnet attempt (2026-07-16).
  */
 function mockPublic(
   opts: {
@@ -56,10 +63,10 @@ function mockPublic(
   } = {},
 ): PublicClient {
   const C = opts.collateralBase ?? usd("200");
-  const D = opts.debtBase ?? usd("100");
-  const hf = opts.hf ?? wad("0.95");
-  const threshold = opts.hfThreshold ?? wad("1.05");
-  const target = opts.targetHf ?? wad("1.10");
+  const D = opts.debtBase ?? usd("139");
+  const hf = opts.hf ?? wad("1.15");
+  const threshold = opts.hfThreshold ?? wad("1.3");
+  const target = opts.targetHf ?? wad("1.6");
   const feeBps = opts.feeBps ?? 0n;
   const bonus = BigInt(opts.liquidationBonusBps ?? 11000); // 10% penalty by default
   const held = opts.collateralHeld ?? parseUnits("1000", 18);
@@ -152,7 +159,7 @@ describe("Deleverager.maybeDeleverage", () => {
   });
 
   test("skips when HF is at/above the vault threshold (no breach)", async () => {
-    const { deleverager } = makeDeleverager(mockPublic({ hf: wad("1.20") }));
+    const { deleverager } = makeDeleverager(mockPublic({ hf: wad("1.35") }));
     const out = await deleverager.maybeDeleverage(VAULT);
     expect(out.status).toBe("skipped_no_breach");
   });
@@ -167,8 +174,10 @@ describe("Deleverager.maybeDeleverage", () => {
     const { deleverager } = makeDeleverager(mockPublic());
     const out = await deleverager.maybeDeleverage(VAULT);
     expect(out.status).toBe("executed");
-    // r=24 USD, fraction 24/200 of 1000 CELO = 120 CELO withdrawn.
-    expect(out.collateralIn).toBe(parseUnits("120", 18));
+    // Target-based size wants r=$78.11 -> 390.57 units, but ONE call cannot lift that
+    // much: the mid-tx bound caps it at 0.7 * C*(hf-floor)/hf = $17.65 -> 88.26 units.
+    // The clamp is the point — sizing at the aspiration is what Aave reverts.
+    expect(out.collateralIn).toBe(88260869550000000000n);
     // Quoted 100 USDC, 100bps slippage -> 99 USDC min-out (the slippage guard).
     expect(out.quotedOut).toBe(parseUnits("100", 6));
     expect(out.minDebtOut).toBe(parseUnits("99", 6));
@@ -205,8 +214,12 @@ describe("Deleverager.maybeDeleverage", () => {
   // --- decision layer (deliberate.ts) wired into the driver ------------------
 
   test("imminent breach (HF <= criticalHf) acts even with a punitive fee", async () => {
-    // Default hf=0.95 <= criticalHf 1.05 -> imminent -> act regardless of cost.
-    const { deleverager } = makeDeleverager(mockPublic({ feeBps: 5000n, liquidationBonusBps: 10500 }));
+    // hf=1.02 <= criticalHf 1.05 -> imminent -> act regardless of cost. It still
+    // sizes >0 because the mid-tx floor (1.005) sits just under it — a 1.02 floor
+    // would zero the cap here and refuse the most urgent rescue there is.
+    const { deleverager } = makeDeleverager(
+      mockPublic({ hf: wad("1.02"), feeBps: 5000n, liquidationBonusBps: 10500 }),
+    );
     const out = await deleverager.maybeDeleverage(VAULT);
     expect(out.status).toBe("executed");
     expect(out.decision?.urgency).toBe("imminent");
@@ -328,5 +341,71 @@ describe("Deleverager double-action safety (O1)", () => {
 
     release();
     expect((await p1).status).toBe("executed");
+  });
+});
+
+/**
+ * REGRESSION — the first live mainnet deleverage (2026-07-16) reverted with Aave's
+ * `HealthFactorLowerThanLiquidationThreshold` (0x6679996d) because the sizing aimed
+ * straight at targetHf and ignored that `deleverage` withdraws BEFORE it repays.
+ *
+ * The fork test never caught this: it sized with its OWN helper (`_sizeDeleverage`),
+ * so it proved the CONTRACT climbs, never that the AGENT sizes a climbable step.
+ * These lock the bound at the agent's own sizing.
+ */
+describe("mid-tx solvency bound", () => {
+  // Only the pure sizing methods are exercised — no chain, no tx.
+  const d = new Deleverager(
+    mockPublic(),
+    null as unknown as TxSender,
+    makeConfig(),
+    new RateLimiter(0, 10, 10_000),
+    silentLog,
+  );
+  // The exact live position that reverted: C=$9.6093, D=$5.9949642, hf=1.282316…
+  const C = 960930000n; // 8-dec USD
+  const HELD = 5010000000000000n; // ~0.00501 WETH
+  const HF = 1282316248026969035n;
+  const FLOOR = parseUnits("1.02", 18);
+
+  test("caps the withdraw so mid-tx HF cannot fall below the floor", () => {
+    const cap = d.computeMidTxCollateralCap(HELD, C, HF, FLOOR, 10_000n); // full room
+    // v_max = C·(hf−floor)/hf, converted to token units via held/C.
+    const vMaxBase = (C * (HF - FLOOR)) / HF;
+    expect(cap).toBe((HELD * vMaxBase) / C);
+    // Mid-tx HF at exactly the cap lands on the floor (within rounding).
+    const vBase = (cap * C) / HELD;
+    const midHf = (HF * (C - vBase)) / C;
+    expect(midHf >= FLOOR - 1n).toBe(true);
+  });
+
+  test("roomBps only takes a fraction of the room (drift headroom)", () => {
+    const full = d.computeMidTxCollateralCap(HELD, C, HF, FLOOR, 10_000n);
+    const partial = d.computeMidTxCollateralCap(HELD, C, HF, FLOOR, 7000n);
+    // roomBps is applied in 8-dec USD *before* the token conversion, so this is
+    // ~70% of full rather than exactly (full*7000)/10000 — assert the intent, not
+    // the truncation order.
+    const want = (full * 7000n) / 10_000n;
+    const drift = partial > want ? partial - want : want - partial;
+    expect(partial < full).toBe(true);
+    expect(drift * 1_000_000n < want).toBe(true); // within 1e-6 relative
+  });
+
+  test("returns 0 at or below the floor — nothing is withdrawable pre-repay", () => {
+    expect(d.computeMidTxCollateralCap(HELD, C, FLOOR, FLOOR, 7000n)).toBe(0n);
+    expect(d.computeMidTxCollateralCap(HELD, C, FLOOR - 1n, FLOOR, 7000n)).toBe(0n);
+  });
+
+  test("the cap is TIGHTER than the target-based size at the live position (the actual bug)", () => {
+    const r = d.computeDebtReductionBase(C, 599496420n, HF, parseUnits("1.6", 18));
+    const wanted = d.computeCollateralIn(HELD, r, C, 0n);
+    const cap = d.computeMidTxCollateralCap(HELD, C, HF, FLOOR, 7000n);
+    expect(wanted > cap).toBe(true); // ← unclamped, this is what Aave reverted
+  });
+
+  test("a deeper breach lifts LESS per call (why the rescue must iterate)", () => {
+    const deep = d.computeMidTxCollateralCap(HELD, C, parseUnits("1.10", 18), FLOOR, 7000n);
+    const shallow = d.computeMidTxCollateralCap(HELD, C, parseUnits("1.28", 18), FLOOR, 7000n);
+    expect(deep < shallow).toBe(true);
   });
 });

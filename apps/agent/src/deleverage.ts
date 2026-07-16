@@ -34,7 +34,7 @@
  *   - DRY_RUN-aware via `TxSender.sendTagged` (builds + tags calldata, no broadcast).
  */
 
-import { formatUnits, type Address, type PublicClient } from "viem";
+import { formatEther, formatUnits, type Address, type PublicClient } from "viem";
 import { MAINNET } from "@comato/shared/addresses";
 import {
   aavePoolAbi,
@@ -145,6 +145,38 @@ export class Deleverager {
     if (collateralIn > collateralHeld) collateralIn = collateralHeld;
     if (cap > 0n && collateralIn > cap) collateralIn = cap;
     return collateralIn;
+  }
+
+  /**
+   * The mid-transaction solvency cap, in collateral-token units.
+   *
+   * `deleverage` withdraws BEFORE it repays, so Aave validates the health factor
+   * against the *reduced* collateral and the *unreduced* debt. Withdrawing `v` USD
+   * leaves mid-tx HF = hf·(C−v)/C — the liquidation threshold and the debt cancel
+   * out, so no extra read is needed. Requiring that to stay >= `floor` gives
+   *
+   *   v <= C · (hf − floor) / hf
+   *
+   * and taking `roomBps` of that room absorbs price drift between this read and
+   * the send. Sizing toward `targetHf` alone ignores this and Aave reverts
+   * `HealthFactorLowerThanLiquidationThreshold` (0x6679996d) — exactly what the
+   * first live mainnet attempt did (2026-07-16: tried $2.38 against a $2.12 bound).
+   *
+   * This is why one call cannot reach target from a breach, and why the loop
+   * climbs in bounded steps. Do not "fix" that — see packages/contracts/CLAUDE.md.
+   */
+  computeMidTxCollateralCap(
+    collateralHeld: bigint,
+    collateralBase: bigint,
+    hf: bigint,
+    floor: bigint,
+    roomBps: bigint,
+  ): bigint {
+    if (collateralHeld <= 0n || collateralBase <= 0n) return 0n;
+    if (hf <= floor) return 0n; // already at/below the floor — nothing is withdrawable pre-repay
+    const vMaxBase = (collateralBase * (hf - floor)) / hf;
+    const roomBase = (vMaxBase * roomBps) / BPS;
+    return (collateralHeld * roomBase) / collateralBase;
   }
 
   /** Slippage-guarded minimum debt-asset out from a quoted amount. */
@@ -368,14 +400,42 @@ export class Deleverager {
         return { status: "failed", vault, reasons: [`collateral balance read failed: ${msg(err)}`] };
       }
 
-      const collateralIn = this.computeCollateralIn(
+      const wanted = this.computeCollateralIn(
         collateralHeld,
         debtReductionBase,
         state.collateralBase,
         this.config.deleverage.maxCollateralIn,
       );
+
+      // Aave checks HF mid-tx (withdraw precedes repay), so the target-based size
+      // above is only an aspiration — clamp it to what this single call can lift.
+      const midTxCap = this.computeMidTxCollateralCap(
+        collateralHeld,
+        state.collateralBase,
+        state.hf,
+        this.config.deleverage.midHfFloor,
+        BigInt(this.config.deleverage.midHfRoomBps),
+      );
+      const collateralIn = wanted > midTxCap ? midTxCap : wanted;
+
       if (collateralIn <= 0n) {
-        return { status: "skipped_no_size", vault, reasons: ["computed collateralIn is zero"] };
+        return {
+          status: "skipped_no_size",
+          vault,
+          reasons:
+            midTxCap <= 0n
+              ? [`no collateral is withdrawable pre-repay at hf ${state.hf} (mid-tx floor ${this.config.deleverage.midHfFloor})`]
+              : ["computed collateralIn is zero"],
+        };
+      }
+      if (wanted > midTxCap) {
+        this.log.info("deleverage bounded by mid-tx solvency (one call cannot reach target)", {
+          event: "deleverage.bounded",
+          vault,
+          wanted: wanted.toString(),
+          cap: midTxCap.toString(),
+          hf: formatEther(state.hf),
+        });
       }
 
       // Quote the swap for the slippage guard.

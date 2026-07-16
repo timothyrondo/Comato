@@ -79,6 +79,26 @@ export const DEFAULTS = {
      */
     criticalHf: "1.05",
     costGateK: 1.25,
+    /**
+     * MID-TX SOLVENCY BOUND — the reason a rescue climbs instead of jumping.
+     *
+     * `deleverage` withdraws before it repays, so Aave validates HF against the
+     * reduced collateral and the full debt: withdrawing v leaves mid-tx
+     * HF = hf·(C−v)/C. Sizing straight at `targetHf` ignores this and Aave reverts
+     * `HealthFactorLowerThanLiquidationThreshold` — the first live mainnet attempt
+     * did exactly that (2026-07-16). `midHfFloor` is the mid-tx HF that must hold
+     * (>1.0 with margin); `midHfRoomBps` takes a fraction of that room so price
+     * drift between the read and the send can't push it under. Both mirror the
+     * fork test that proved the climb (`ComatoVaultFork.t.sol` MID_HF_FLOOR/70%).
+     *
+     * The floor sits just above Aave's hard 1.0, NOT at a comfortable 1.02: taking
+     * `midHfRoomBps` of the room lands mid-tx HF at (1−r)·hf + r·floor — a weighted
+     * average, so it clears 1.0 for ANY breach as long as floor > 1.0. A 1.02 floor
+     * instead zeroes the cap below hf 1.02 — the agent would refuse to act at hf 1.01,
+     * exactly when the subscriber needs it most. Room, not floor, buys the margin.
+     */
+    midHfFloor: "1.005",
+    midHfRoomBps: 7000,
     /** Per-vault cooldown between deleverages. */
     cooldownMs: 3_600_000,
     /** Max deleverages per vault within `windowMs`. */

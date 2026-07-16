@@ -106,6 +106,10 @@ export interface Config {
     criticalHf: bigint;
     /** Deliberate band: require penaltyBps >= costGateK * costBps to rescue. */
     costGateK: number;
+    /** Mid-tx HF floor that must hold between the withdraw and the repay (WAD). */
+    midHfFloor: bigint;
+    /** Fraction (bps) of the mid-tx withdrawable room to actually take. */
+    midHfRoomBps: number;
     /** Per-vault cooldown between deleverages (rate limit; reuses RateLimiter). */
     cooldownMs: number;
     /** Max deleverages per vault within `windowMs` (rate limit). */
@@ -334,6 +338,8 @@ export function loadConfig(): Config {
       maxVaults: DEFAULTS.deleverage.maxVaults,
       criticalHf: parseUnits(DEFAULTS.deleverage.criticalHf, 18),
       costGateK: DEFAULTS.deleverage.costGateK,
+      midHfFloor: parseUnits(DEFAULTS.deleverage.midHfFloor, 18),
+      midHfRoomBps: DEFAULTS.deleverage.midHfRoomBps,
       cooldownMs: DEFAULTS.deleverage.cooldownMs,
       maxPerWindow: DEFAULTS.deleverage.maxPerWindow,
       windowMs: DEFAULTS.deleverage.windowMs,

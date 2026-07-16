@@ -35,6 +35,8 @@ export function makeConfig(overrides: Partial<Config> = {}): Config {
       maxVaults: 200,
       criticalHf: parseUnits("1.05", 18),
       costGateK: 1.25,
+      midHfFloor: parseUnits("1.005", 18),
+      midHfRoomBps: 7000,
       cooldownMs: 3_600_000,
       maxPerWindow: 3,
       windowMs: 86_400_000,
