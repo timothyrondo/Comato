@@ -526,7 +526,7 @@ function PremiumRail() {
           <MoneyCount value={activitySummary.totalSavedUsd} />
         </div>
         <div className="mt-1.5 text-[12px] text-on-dark-muted">
-          Liquidation penalties avoided
+          Debt repaid to safety
         </div>
       </div>
       <dl className="space-y-2.5">
@@ -751,9 +751,9 @@ function ActivityView() {
           sub={`From ${activitySummary.rescueCount} rescues`}
         />
         <StatTile
-          label="Premiums paid"
+          label="Fees paid"
           value={<MoneyCount value={activitySummary.premiumPaidUsd} />}
-          sub="Heartbeat x402"
+          sub="Rescue service fee"
         />
         <StatTile
           tone="accent"

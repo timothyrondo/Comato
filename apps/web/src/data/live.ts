@@ -12,7 +12,7 @@
 
 import { formatUnits, type Address, type PublicClient } from "viem";
 import type { LiveConfig } from "../lib/env";
-import { aavePoolAbi, comatoPolicyAbi, comatoExecutorAbi } from "../lib/abis";
+import { aavePoolAbi, comatoPolicyAbi, comatoExecutorAbi, comatoVaultAbi } from "../lib/abis";
 import {
   AAVE_V3_POOL,
   AAVE_BASE_DECIMALS,
@@ -127,7 +127,7 @@ async function readPolicy(
 
 async function readPosition(
   client: PublicClient,
-  cfg: LiveConfig,
+  subscriber: Address,
   policy: PolicyRecord | null,
 ): Promise<Position> {
   const [
@@ -141,7 +141,7 @@ async function readPosition(
     address: AAVE_V3_POOL,
     abi: aavePoolAbi,
     functionName: "getUserAccountData",
-    args: [cfg.subscriber],
+    args: [subscriber],
   });
 
   const collateralUsd = Number(formatUnits(totalCollateralBase, AAVE_BASE_DECIMALS));
@@ -170,6 +170,7 @@ async function readPosition(
 async function readRescues(
   client: PublicClient,
   cfg: LiveConfig,
+  subscriber: Address,
 ): Promise<ActivityItem[]> {
   if (!cfg.executorAddr) return [];
 
@@ -177,7 +178,7 @@ async function readRescues(
     address: cfg.executorAddr,
     abi: comatoExecutorAbi,
     eventName: "RescueExecuted",
-    args: { subscriber: cfg.subscriber },
+    args: { subscriber },
     fromBlock: cfg.fromBlock,
     toBlock: "latest",
   });
@@ -225,15 +226,201 @@ function money(usd: number): string {
   return `$${usd.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 }
 
+/*//////////////////////////////////////////////////////////////
+                  MODEL C — vault-based live reads
+//////////////////////////////////////////////////////////////*/
+
+/**
+ * Read the vault's Aave position + terms, shaped into a {@link Position}.
+ * The Aave position lives under the VAULT address (Model C is non-custodial:
+ * the vault holds the collateral/debt), so `getUserAccountData` is called with
+ * the vault, and the collateral/debt symbols + rescue threshold come from the
+ * vault's own getters.
+ */
+async function readVaultPosition(client: PublicClient, vault: Address): Promise<Position> {
+  const [account, collateralAsset, debtAsset, hfThreshold] = await Promise.all([
+    client.readContract({
+      address: AAVE_V3_POOL,
+      abi: aavePoolAbi,
+      functionName: "getUserAccountData",
+      args: [vault],
+    }),
+    client.readContract({ address: vault, abi: comatoVaultAbi, functionName: "collateralAsset" }),
+    client.readContract({ address: vault, abi: comatoVaultAbi, functionName: "debtAsset" }),
+    client.readContract({ address: vault, abi: comatoVaultAbi, functionName: "hfThreshold" }),
+  ]);
+
+  const [totalCollateralBase, totalDebtBase, , currentLiquidationThreshold, , healthFactor] = account;
+  const collateralUsd = Number(formatUnits(totalCollateralBase, AAVE_BASE_DECIMALS));
+  const debtUsd = Number(formatUnits(totalDebtBase, AAVE_BASE_DECIMALS));
+
+  return {
+    ...mockPosition, // UI-only fields (uptime label) kept sane
+    healthFactor: hfToNumber(healthFactor),
+    liquidationHf: 1.0,
+    rescueHf: hfToNumber(hfThreshold as bigint),
+    collateralUsd,
+    debtUsd,
+    currentLtv: collateralUsd > 0 ? debtUsd / collateralUsd : 0,
+    liquidationLtv: Number(currentLiquidationThreshold) / AAVE_BPS,
+    collateralAsset: tokenSymbol(collateralAsset as Address),
+    debtAsset: tokenSymbol(debtAsset as Address),
+    monitorIntervalSec: 30, // the agent's real monitor cadence
+    // Model C is a success-fee model, not a streaming premium — there is no
+    // hourly rate on the vault. Zero rather than fabricate one (the x402 premium
+    // is a separate, not-yet-wired system — see docs open item #6).
+    premiumPerHourUsd: 0,
+  };
+}
+
+/** Public Celo RPCs (forno) cap `eth_getLogs` at a 5000-block range per call. */
+const MAX_LOG_RANGE = 4500n;
+/**
+ * Query a few blocks below the tip: forno load-balances across nodes, and
+ * `getBlockNumber` can return a height a `getLogs` on a slightly-behind node
+ * then rejects with "block is out of range". A small margin avoids the race.
+ */
+const TIP_MARGIN = 8n;
+
+/** The fields we read off a decoded `Deleveraged` log. */
+interface VaultLog {
+  args: {
+    collateralWithdrawn: bigint;
+    debtRepaid: bigint;
+    fee: bigint;
+    hfBefore: bigint;
+    hfAfter: bigint;
+  };
+  blockNumber: bigint | null;
+  transactionHash: `0x${string}` | null;
+  logIndex: number | null;
+}
+
+/**
+ * Incremental log cache. The data context re-fetches every 12s; scanning
+ * fromBlock→latest each time is O(range) getLogs calls that grow unbounded and
+ * would hammer/rate-limit forno within days. Instead we scan the full history
+ * once (paged into ≤MAX_LOG_RANGE windows — forno rejects wider ranges), then on
+ * each later poll only scan the delta since the last block we covered. Keyed by
+ * vault so a config change resets it.
+ */
+const logCache = new Map<Address, { scannedTo: bigint; logs: VaultLog[] }>();
+
+async function fetchDeleverageLogs(client: PublicClient, cfg: LiveConfig): Promise<VaultLog[]> {
+  const vault = cfg.vaultAddr as Address;
+  const latest = (await client.getBlockNumber()) - TIP_MARGIN;
+
+  const cached = logCache.get(vault);
+  const from = cached ? cached.scannedTo + 1n : cfg.fromBlock;
+  const logs = cached ? cached.logs : [];
+
+  for (let f = from; f <= latest; f += MAX_LOG_RANGE + 1n) {
+    const to = f + MAX_LOG_RANGE > latest ? latest : f + MAX_LOG_RANGE;
+    const chunk = (await client.getContractEvents({
+      address: vault,
+      abi: comatoVaultAbi,
+      eventName: "Deleveraged",
+      fromBlock: f,
+      toBlock: to,
+    })) as unknown as VaultLog[];
+    logs.push(...chunk);
+  }
+
+  logCache.set(vault, { scannedTo: latest > from ? latest : from - 1n, logs });
+  return logs;
+}
+
+/**
+ * Shape the vault's `Deleveraged` events into activity items. Each carries the
+ * debt repaid, the service fee, and the HF before/after — all on-chain, all
+ * verifiable. No fabricated activity.
+ */
+async function shapeDeleverages(client: PublicClient, logs: VaultLog[]): Promise<ActivityItem[]> {
+  const blockNums = [...new Set(logs.map((l) => l.blockNumber).filter((n): n is bigint => n != null))];
+  const blocks = await Promise.all(blockNums.map((n) => client.getBlock({ blockNumber: n })));
+  const tsByBlock = new Map<bigint, number>(blocks.map((b) => [b.number as bigint, Number(b.timestamp)]));
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  const items = logs.map((log, i): ActivityItem => {
+    const { debtRepaid, hfBefore, hfAfter } = log.args as {
+      debtRepaid: bigint;
+      hfBefore: bigint;
+      hfAfter: bigint;
+    };
+    const repaidUsd = Number(formatUnits(debtRepaid, 6));
+    const before = hfToNumber(hfBefore);
+    const after = hfToNumber(hfAfter);
+    const tsSec = log.blockNumber != null ? tsByBlock.get(log.blockNumber) ?? nowSec : nowSec;
+
+    return {
+      id: `${log.transactionHash ?? "deleverage"}-${log.logIndex ?? i}`,
+      kind: "rescue",
+      title: "Position rescued",
+      subtitle: `HF ${before.toFixed(2)} → ${after.toFixed(2)} · deleveraged ${money(repaidUsd)}`,
+      amountUsd: repaidUsd,
+      timeAgo: relativeTime(tsSec, nowSec),
+      day: dayBucket(tsSec, nowSec),
+      hfBefore: before,
+      hfAfter: after,
+    };
+  });
+
+  return items.reverse(); // newest first
+}
+
+async function fetchLiveDataFromVault(client: PublicClient, cfg: LiveConfig): Promise<LiveData> {
+  const vault = cfg.vaultAddr as Address;
+  const [position, logs] = await Promise.all([
+    readVaultPosition(client, vault),
+    fetchDeleverageLogs(client, cfg),
+  ]);
+  const activity = await shapeDeleverages(client, logs);
+  const feesPaid = Number(
+    formatUnits(
+      logs.reduce((s, l) => s + ((l.args as { fee?: bigint }).fee ?? 0n), 0n),
+      6,
+    ),
+  );
+
+  const user: User = {
+    ...mockUser,
+    walletShort: shortAddr(vault),
+    contextLabel: "ComatoVault · Aave V3 · Celo",
+  };
+
+  return {
+    user,
+    position,
+    rescuePlan: buildRescuePlan(position.rescueHf, position.monitorIntervalSec),
+    activity,
+    activitySummary: {
+      // Real on-chain totals — the debt actually moved back to safety, and the
+      // service fee actually paid to Comato. Small and true beats large and fake.
+      totalSavedUsd: activity.reduce((s, a) => s + a.amountUsd, 0),
+      rescueCount: activity.length,
+      premiumPaidUsd: feesPaid,
+    },
+  };
+}
+
 /** Fetch and shape all live data. Throws on the primary read failing. */
 export async function fetchLiveData(
   client: PublicClient,
   cfg: LiveConfig,
 ): Promise<LiveData> {
+  // Model C vault path (current architecture) takes precedence when configured.
+  if (cfg.vaultAddr) return fetchLiveDataFromVault(client, cfg);
+
+  // Legacy Policy/Executor demo path — env guarantees `subscriber` here (a live
+  // config without a vault requires subscriber + policy/executor), but assert it
+  // so the reads below are well-typed.
+  if (!cfg.subscriber) throw new Error("live config without a vault requires a subscriber");
+  const subscriber = cfg.subscriber;
+
   const policy = await readPolicy(client, cfg);
   const [position, rescues] = await Promise.all([
-    readPosition(client, cfg, policy),
-    readRescues(client, cfg),
+    readPosition(client, subscriber, policy),
+    readRescues(client, cfg, subscriber),
   ]);
 
   const totalSavedUsd = rescues.reduce((s, r) => s + r.amountUsd, 0);
@@ -241,7 +428,7 @@ export async function fetchLiveData(
 
   const user: User = {
     ...mockUser,
-    walletShort: shortAddr(cfg.subscriber),
+    walletShort: shortAddr(subscriber),
     contextLabel: "Aave V3 position · Celo",
   };
 

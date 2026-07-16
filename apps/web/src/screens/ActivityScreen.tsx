@@ -74,9 +74,9 @@ export default function ActivityScreen() {
           }
         />
         <StatTile
-          label="Premiums paid"
+          label="Fees paid"
           value={<MoneyCount value={activitySummary.premiumPaidUsd} />}
-          sub="Heartbeat x402"
+          sub="Rescue service fee"
         />
         <StatTile
           label="Average rescue"

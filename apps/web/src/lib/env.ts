@@ -13,11 +13,19 @@ import { isAddress, getAddress, type Address } from "viem";
 export interface LiveConfig {
   rpcUrl: string;
   chainId: number;
-  subscriber: Address;
+  /**
+   * Model C: the ComatoVault holding the Aave position. When set, the live path
+   * reads the vault (position + `Deleveraged` rescue events) instead of the old
+   * Policy/Executor model, and `subscriber` becomes optional (the vault IS the
+   * displayed account). This is the current architecture; policy/executor below
+   * are the legacy demo path, kept for the fork demo.
+   */
+  vaultAddr?: Address;
+  subscriber?: Address;
   policyAddr?: Address;
   executorAddr?: Address;
   policyId?: bigint;
-  /** Block to start scanning RescueExecuted logs from (fork block by default). */
+  /** Block to start scanning rescue logs from (deploy block by default). */
   fromBlock: bigint;
 }
 
@@ -33,13 +41,16 @@ function optAddr(value: string | undefined): Address | undefined {
 export function readLiveConfig(): LiveConfig | null {
   const env = import.meta.env;
   const rpcUrl = env.VITE_RPC_URL?.trim();
+  const vaultAddr = optAddr(env.VITE_VAULT_ADDR);
   const subscriber = optAddr(env.VITE_SUBSCRIBER_ADDR);
   const policyAddr = optAddr(env.VITE_POLICY_ADDR);
   const executorAddr = optAddr(env.VITE_EXECUTOR_ADDR);
 
-  // Minimum viable live config: an RPC, a subscriber to display, and at least
-  // one Comato contract to read policy/rescue data from.
-  if (!rpcUrl || !subscriber || (!policyAddr && !executorAddr)) return null;
+  // Minimum viable live config: an RPC plus EITHER a Model C vault (current
+  // architecture) OR the legacy subscriber + policy/executor demo path.
+  const hasVault = Boolean(vaultAddr);
+  const hasLegacy = Boolean(subscriber && (policyAddr || executorAddr));
+  if (!rpcUrl || (!hasVault && !hasLegacy)) return null;
 
   const chainId = Number.parseInt(env.VITE_CHAIN_ID ?? "42220", 10);
   const policyIdRaw = env.VITE_POLICY_ID?.trim();
@@ -48,6 +59,7 @@ export function readLiveConfig(): LiveConfig | null {
   return {
     rpcUrl,
     chainId: Number.isFinite(chainId) ? chainId : 42220,
+    vaultAddr,
     subscriber,
     policyAddr,
     executorAddr,
