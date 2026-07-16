@@ -207,6 +207,8 @@ export interface Config {
     repriceIntervalMs: number;
     /** Billing window the premium is quoted for (must match the server cadence). */
     billingWindowMs: number;
+    /** Minimum premium per settlement (USDC) — floors tiny risk-priced quotes. */
+    minPremiumUsdc: string;
   };
 }
 
@@ -400,6 +402,7 @@ export function loadConfig(): Config {
       storePath: opt("QUOTE_STORE_PATH", DEFAULTS.pricer.storePath),
       repriceIntervalMs: DEFAULTS.pricer.repriceIntervalMs,
       billingWindowMs: DEFAULTS.pricer.billingWindowMs,
+      minPremiumUsdc: DEFAULTS.pricer.minPremiumUsdc,
     },
   };
 

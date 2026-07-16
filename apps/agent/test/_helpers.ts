@@ -89,6 +89,7 @@ export function makeConfig(overrides: Partial<Config> = {}): Config {
       storePath: "/nonexistent/quotes.json",
       repriceIntervalMs: 21_600_000,
       billingWindowMs: 3_600_000,
+      minPremiumUsdc: "0.0002",
     },
   };
   return {

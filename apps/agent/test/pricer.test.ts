@@ -18,6 +18,7 @@ const cfg = {
   baseUrl: "https://example.invalid/v1",
   model: "test/model",
   timeoutMs: 5_000,
+  minPremiumUsdc: "0.0002",
 };
 
 const position: PositionRisk = {
@@ -68,6 +69,16 @@ describe("premiumFor", () => {
     const p = (t: "low" | "medium" | "high") => Number(premiumFor(t, 3_400, HOUR).premiumUsdc);
     expect(p("low")).toBeLessThan(p("medium"));
     expect(p("medium")).toBeLessThan(p("high"));
+  });
+
+  it("floors a tiny position to the settleable minimum, but never lowers a real price", () => {
+    // A $4.62 demo vault risk-prices to ~$0.0000035 — below dust. The floor lifts it.
+    const floored = premiumFor("medium", 4.62, HOUR, 0.0002);
+    expect(Number(floored.premiumUsdc)).toBe(0.0002);
+    // A normal position prices above the floor, so the floor is inert (no change).
+    const unfloored = premiumFor("medium", 3_400, HOUR, 0.0002);
+    expect(Number(unfloored.premiumUsdc)).toBeGreaterThan(0.0002);
+    expect(Number(unfloored.premiumUsdc)).toBe(Number(premiumFor("medium", 3_400, HOUR).premiumUsdc));
   });
 
   it("emits USDC-settleable precision (6dp)", () => {

@@ -151,5 +151,14 @@ export const DEFAULTS = {
     repriceIntervalMs: 21_600_000,
     /** Must match the server's billing cadence (heartbeatIntervalMs, 1h). */
     billingWindowMs: 3_600_000,
+    /**
+     * Minimum premium per settlement (USDC). Risk-pricing is proportional to debt,
+     * so a tiny position (e.g. a $5 demo vault) prices to fractions of a cent —
+     * economically correct but below a settleable amount. This floor keeps every
+     * quote a real, settleable charge. Set to 0.0002: one x402 settlement burns ~1
+     * credit (~$0.001 at $1 / 1000 credits), so the floor stays a deliberate,
+     * count-first premium, not a per-settlement profit target.
+     */
+    minPremiumUsdc: "0.0002",
   },
 } as const;

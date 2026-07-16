@@ -67,6 +67,8 @@ export interface PricerConfig {
   baseUrl: string;
   model: string;
   timeoutMs: number;
+  /** Minimum premium per settlement, decimal USDC (floors tiny risk-priced quotes). */
+  minPremiumUsdc: string;
 }
 
 export interface PositionRisk {
@@ -92,12 +94,21 @@ export interface PricedQuote extends Quote {
 
 /**
  * Premium for one billing window, from tier + debt. Deterministic and total: the
- * result is always inside TIER_APR by construction.
+ * tier→APR→USDC mapping is always inside TIER_APR by construction. `floorUsdc` is
+ * a final minimum applied AFTER the risk-price so a tiny position still yields a
+ * settleable charge (see DEFAULTS.pricer.minPremiumUsdc); it raises the effective
+ * APR for such positions, which is why the floor is deliberately small.
  */
-export function premiumFor(tier: RiskTier, debtUsd: number, windowMs: number): { premiumUsdc: string; aprPct: number } {
+export function premiumFor(
+  tier: RiskTier,
+  debtUsd: number,
+  windowMs: number,
+  floorUsdc = 0,
+): { premiumUsdc: string; aprPct: number } {
   const apr = TIER_APR[tier];
   const windowsPerYear = (HOURS_PER_YEAR * 3_600_000) / windowMs;
-  const premium = (apr * debtUsd) / windowsPerYear;
+  const riskPremium = (apr * debtUsd) / windowsPerYear;
+  const premium = Math.max(riskPremium, floorUsdc);
   return {
     // 6dp: USDC's own precision. Anything finer cannot be settled.
     premiumUsdc: premium.toFixed(6),
@@ -129,10 +140,16 @@ function describe(p: PositionRisk): string {
 }
 
 export class Pricer {
+  /** Minimum premium (USDC) applied to every quote — parsed once from config. */
+  private readonly floorUsdc: number;
+
   constructor(
     private readonly config: PricerConfig,
     private readonly log: Logger,
-  ) {}
+  ) {
+    const floor = Number(config.minPremiumUsdc);
+    this.floorUsdc = Number.isFinite(floor) && floor > 0 ? floor : 0;
+  }
 
   /**
    * Underwrite one position. Never throws and never blocks billing — every failure
@@ -149,7 +166,7 @@ export class Pricer {
       return {
         riskTier: DEFAULT_TIER,
         rationale: `Default tier (${reason}).`,
-        ...premiumFor(DEFAULT_TIER, position.debtUsd, windowMs),
+        ...premiumFor(DEFAULT_TIER, position.debtUsd, windowMs, this.floorUsdc),
         fallback: true,
       };
     };
@@ -166,7 +183,7 @@ export class Pricer {
     const parsed = quoteSchema.safeParse(extractJson(raw));
     if (!parsed.success) return fallback("malformed model output", parsed.error.issues[0]?.message);
 
-    const priced = premiumFor(parsed.data.riskTier, position.debtUsd, windowMs);
+    const priced = premiumFor(parsed.data.riskTier, position.debtUsd, windowMs, this.floorUsdc);
     this.log.info("position underwritten", {
       event: "pricer.quote",
       subscriber: position.subscriber,
