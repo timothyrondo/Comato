@@ -17,10 +17,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { PublicClient } from "viem";
-import { liveConfig } from "../lib/env";
+import type { Address, PublicClient } from "viem";
+import { liveConfig, subscribeConfig } from "../lib/env";
 import { createReadClient } from "../lib/chain";
+import { readVaultOf } from "../lib/vault";
 import { fetchLiveData, type LiveData } from "./live";
+import { useWallet } from "./wallet";
 import {
   user as mockUser,
   position as mockPosition,
@@ -68,11 +70,42 @@ export function ComatoDataProvider({ children }: { children: ReactNode }) {
   const clientRef = useRef<PublicClient | null>(null);
   const lastFetchAtRef = useRef<number>(Date.now());
 
+  // The dashboard follows the CONNECTED WALLET's vault when it has one, so a real
+  // user sees their own position — not a hardcoded demo vault. `VITE_VAULT_ADDR`
+  // is only the fallback shown to visitors who haven't connected (a judge sees a
+  // live example instead of mock). null until resolved / when the wallet has none.
+  const { account } = useWallet();
+  const [walletVault, setWalletVault] = useState<Address | null>(null);
+
+  useEffect(() => {
+    const factory = subscribeConfig.factoryAddr;
+    if (!liveConfig || !account || !factory) {
+      setWalletVault(null);
+      return;
+    }
+    let alive = true;
+    if (!clientRef.current) clientRef.current = createReadClient(liveConfig);
+    void readVaultOf(clientRef.current, factory, account)
+      .then((v) => {
+        if (alive) setWalletVault(v);
+      })
+      .catch(() => {
+        if (alive) setWalletVault(null); // read failed → fall back to the demo vault
+      });
+    return () => {
+      alive = false;
+    };
+  }, [account]);
+
+  /** The vault the dashboard reads: the connected wallet's, else the env demo vault. */
+  const effectiveVault = walletVault ?? liveConfig?.vaultAddr;
+
   const load = useCallback(async () => {
     if (!liveConfig) return;
     if (!clientRef.current) clientRef.current = createReadClient(liveConfig);
     try {
-      const live = await fetchLiveData(clientRef.current, liveConfig);
+      const cfg = effectiveVault ? { ...liveConfig, vaultAddr: effectiveVault } : liveConfig;
+      const live = await fetchLiveData(clientRef.current, cfg);
       setData(live);
       setIsLive(true);
       setError(null);
@@ -83,9 +116,10 @@ export function ComatoDataProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [effectiveVault]);
 
-  // Initial fetch + polling.
+  // Initial fetch + polling. Re-subscribes when `load` changes (i.e. the
+  // effective vault switched between the demo vault and the wallet's own).
   useEffect(() => {
     if (!liveConfig) return;
     let alive = true;
